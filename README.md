@@ -54,11 +54,12 @@ The Rust API is mostly method-for-method compatible with the languages documente
 down at the document property level (dictionaries, arrays, etc.) where I haven't yet written
 compatible bindings. For those APIs you can check out the document "[Using Fleece][FLEECE]".
 
-FYI, if you want to see what bindgen's Rust translation of the C API looks like, it's in the file `bindings.rs` in `build/couchbase-lite-*/out`, where "`*`" will be some hex string. This is super unlikely to be useful unless you want to work on improving the high-level bindings themselves.)
+(FYI, if you want to see what bindgen's Rust translation of the C API looks like, it's in the file `bindings.rs` in `build/couchbase-lite-*/out`, where "`*`" will be some hex string. This is super unlikely to be useful unless you want to work on improving the high-level bindings themselves.)
 
 
 [RUST]: https://www.rust-lang.org
 [CBL]: https://www.couchbase.com/products/lite
+[CBL_C]: https://github.com/couchbase/couchbase-lite-C
 [CBLDOCS]: https://docs.couchbase.com/couchbase-lite/current/introduction.html
 [FLEECE]: https://github.com/couchbaselabs/fleece/wiki/Using-Fleece
 [BINDGEN]: https://rust-lang.github.io/rust-bindgen/
