@@ -36,7 +36,8 @@ static CBL_LIB_FILENAME : &str  = "libcblite.dylib";
 // Where to find Clang and LLVM libraries:
 static DEFAULT_LIBCLANG_PATH : &str = "/usr/local/Cellar/llvm/12.0.1/lib";
 
-static INCLUDE_CBL_IN_LIB : bool = false;
+static STATIC_LINK_CBL : bool = false;
+static CBL_SRC_DIR : &str = "../../CBL_C";
 
 fn main() {
     // Set LIBCLANG_PATH environment variable if it's not already set:
@@ -75,39 +76,47 @@ fn main() {
         .expect("Couldn't write bindings!");
 
     // Tell cargo to tell rustc to link the cblite library.
-    //TODO: Abort the build now if the library does not exist, and tell the user to run CMake.
-    if INCLUDE_CBL_IN_LIB {
-        // TODO: Get this working again!
-
-        // let root = root_dir.to_str().unwrap();
+    if STATIC_LINK_CBL {
+        // Link against the CBL-C and LiteCore static libraries for maximal efficienty.
+        // This assumes that a checkout of couchbase-lite-C exists at CBL_SRC_DIR
+        // and has been built with CMake.
+        // TODO: Currently, on Mac OS this requires manual processing of the static libraries
+        //       because Rust can't link with fat libraries. Thus all the libraries linked below
+        //       had to be thinned with e.g. `libXXX.a -thin x86_64 -output libXXX-x86.a`.
+        let cblite_src_path = PathBuf::from(CBL_SRC_DIR);
+        let root = cblite_src_path.to_str().unwrap();
         
-        // println!("cargo:rustc-link-search={}/build_cmake", root);
-        // println!("cargo:rustc-link-search={}/build_cmake/vendor/couchbase-lite-core", root);
-        // println!("cargo:rustc-link-search={}/build_cmake/vendor/couchbase-lite-core/vendor/BLIP-Cpp", root);
-        // println!("cargo:rustc-link-search={}/build_cmake/vendor/couchbase-lite-core/vendor/fleece", root);
-        // println!("cargo:rustc-link-search={}/build_cmake/vendor/couchbase-lite-core/vendor/mbedtls/library", root);
-        // println!("cargo:rustc-link-search={}/build_cmake/vendor/couchbase-lite-core/vendor/sqlite3-unicodesn", root);
+        println!("cargo:rustc-link-search={}/build_cmake", root);
+        println!("cargo:rustc-link-search={}/build_cmake/vendor/couchbase-lite-core", root);
+        println!("cargo:rustc-link-search={}/build_cmake/vendor/couchbase-lite-core/Networking/BLIP", root);
+        println!("cargo:rustc-link-search={}/build_cmake/vendor/couchbase-lite-core/vendor/fleece", root);
+        println!("cargo:rustc-link-search={}/build_cmake/vendor/couchbase-lite-core/vendor/mbedtls/library", root);
+        println!("cargo:rustc-link-search={}/build_cmake/vendor/couchbase-lite-core/vendor/mbedtls/crypto/library", root);
+        println!("cargo:rustc-link-search={}/build_cmake/vendor/couchbase-lite-core/vendor/sqlite3-unicodesn", root);
 
-        // println!("cargo:rustc-link-lib=static=cblite-static");
-        // println!("cargo:rustc-link-lib=static=FleeceStatic");
+        println!("cargo:rustc-link-lib=static=cblite-static-x86");
+        println!("cargo:rustc-link-lib=static=liteCoreStatic-x86");
+        println!("cargo:rustc-link-lib=static=liteCoreWebSocket-x86");
+        println!("cargo:rustc-link-lib=static=BLIPStatic-x86");
+        println!("cargo:rustc-link-lib=static=FleeceStatic-x86");
+        println!("cargo:rustc-link-lib=static=CouchbaseSqlite3-x86");
+        println!("cargo:rustc-link-lib=static=SQLite3_UnicodeSN-x86");
+        println!("cargo:rustc-link-lib=static=mbedcrypto-x86");
+        println!("cargo:rustc-link-lib=static=mbedtls-x86");
+        println!("cargo:rustc-link-lib=static=mbedx509-x86");
 
-        // println!("cargo:rustc-link-lib=static=liteCoreStatic");
-        // println!("cargo:rustc-link-lib=static=liteCoreWebSocket");
-        // println!("cargo:rustc-link-lib=static=SQLite3_UnicodeSN");
-        // println!("cargo:rustc-link-lib=static=BLIPStatic");
-        // println!("cargo:rustc-link-lib=static=mbedtls");
-        // println!("cargo:rustc-link-lib=static=mbedcrypto");
+        println!("cargo:rustc-link-lib=c++");
+        println!("cargo:rustc-link-lib=z");
 
-        // println!("cargo:rustc-link-lib=c++");
-        // println!("cargo:rustc-link-lib=z");
+        // TODO: This only applies to Apple platforms:
+        println!("cargo:rustc-link-lib=framework=CoreFoundation");
+        println!("cargo:rustc-link-lib=framework=Foundation");
+        println!("cargo:rustc-link-lib=framework=CFNetwork");
+        println!("cargo:rustc-link-lib=framework=Security");
+        println!("cargo:rustc-link-lib=framework=SystemConfiguration");
 
-        // println!("cargo:rustc-link-lib=framework=CoreFoundation");
-        // println!("cargo:rustc-link-lib=framework=Foundation");
-        // println!("cargo:rustc-link-lib=framework=CFNetwork");
-        // println!("cargo:rustc-link-lib=framework=Security");
-        // println!("cargo:rustc-link-lib=framework=SystemConfiguration");
     } else {
-        // Copy the CBL dylib:
+        // Link against and copy the CBL dynamic library:
         let src = PathBuf::from(CBL_LIB_DIR).join(CBL_LIB_FILENAME);
         let dst = out_dir.join(CBL_LIB_FILENAME);
         println!("cargo:rerun-if-changed={}", src.to_str().unwrap());
