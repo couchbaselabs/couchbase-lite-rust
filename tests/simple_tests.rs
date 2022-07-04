@@ -16,11 +16,19 @@
 //
 #![allow(unused_imports)]
 
+mod utils;
+
 extern crate couchbase_lite;
 extern crate tempdir;
 
 use couchbase_lite::*;
 use tempdir::TempDir;
+
+use std::{
+    path::Path,
+    sync::{Arc, Mutex, mpsc},
+    thread, time,
+};
 
 // Enables check for leaks of native CBL objects after `with_db()` finishes.
 // WARNING: These checks only work if one test method runs at a time, i.e. testing is single
@@ -177,15 +185,85 @@ fn query() {
     });
 }
 
+static mut DOCUMENT_DETECTED: bool = false;
+
 #[test]
-fn query() {
-    with_db(|db| {
-            add_doc(db, "doc-1", 1, "one");
-            add_doc(db, "doc-2", 2, "two");
-            add_doc(db, "doc-3", 3, "three");
-    }
+fn change_listener() {
+    let (db_thread_1, db_exec_1) = utils::run_db_thread(Path::new("test_db"));
+    db_exec_1.spawn(move |db| {
+        if let Some(db) = db.as_mut() {
+            db.add_listener(|_, doc_ids| {
+                if let Some(id) = doc_ids.first() {
+                    if "document_db_2" == id {
+                        unsafe {
+                            DOCUMENT_DETECTED = true;
+                        }
+                    }
+                }
+            });
+        } else {
+            eprintln!("db is NOT open");
+        }
+    });
+
+    let (db_thread_2, db_exec_2) = utils::run_db_thread(Path::new("test_db"));
+    add_document(&db_exec_2, "test".to_string());
+
+    assert!(is_document_detected());
+
+    utils::close_db(db_thread_1, db_exec_1);
+    utils::close_db(db_thread_2, db_exec_2);
+
+    utils::delete_db(Path::new("test_db"));
 }
 
+fn add_document(db_exec: &utils::DbQueryExecutor, data: String) {
+    db_exec.spawn(move |db| {
+        if let Some(db) = db.as_mut() {
+            save_message(db, data.as_str(), Some("document_db_2")).unwrap();
+        } else {
+            eprintln!("db is NOT open");
+        }
+    });
+
+    //wait_for_replicators_idle();
+}
+
+fn save_message(
+    db: &mut Database,
+    data: &str,
+    doc_id: Option<&str>,
+) -> Result<()> {
+    let mut doc = if let Some(doc_id) = doc_id {
+        println!("save_message: edit message");
+        Document::new_with_id(doc_id)
+    } else {
+        Document::new()
+    };
+
+    let mut prop = doc.mutable_properties();
+    prop.at("msg").put_string(data);
+    prop.at("owner").put_string("qux");
+    println!("save_message: doc id {}", doc.id());
+
+    db.save_document(&mut doc, ConcurrencyControl::LastWriteWins)
+        .unwrap();
+    Ok(())
+}
+
+fn is_document_detected() -> bool {
+    let ten_seconds = time::Duration::from_secs(10);
+    let now = time::Instant::now();
+    let wait_fetch_document = time::Duration::from_millis(1000);
+
+    unsafe {
+        while !DOCUMENT_DETECTED && now.elapsed() < ten_seconds {
+            thread::sleep(wait_fetch_document);
+        }
+
+        DOCUMENT_DETECTED
+    }
+}
 
 /*
 // This test doesn't and shouldn't compile -- it tests that the borrow-checker will correctly
