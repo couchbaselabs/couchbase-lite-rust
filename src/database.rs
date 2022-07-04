@@ -45,6 +45,27 @@ enum_from_primitive! {
 
 type ChangeListener = fn(db: &Database, doc_ids: Vec<String>);
 
+#[no_mangle]
+unsafe extern "C" fn c_change_listener(
+    context: *mut ::std::os::raw::c_void,
+    db: *const CBLDatabase,
+    num_docs: ::std::os::raw::c_uint,
+    c_doc_ids: *mut FLString,
+) {
+    let callback: ChangeListener = std::mem::transmute(context);
+
+    let database = Database { _ref: db as *mut CBLDatabase };
+    let mut vec_doc_ids = Vec::new();
+    for i in 0..num_docs {
+        if let Some(doc_id) = c_doc_ids.offset(i as isize).as_ref() {
+            if let Some(doc_id) = doc_id.to_string() {
+                vec_doc_ids.push(doc_id.to_string())
+            }
+        }
+    }
+
+    callback(&database, vec_doc_ids);
+}
 
 /** A connection to an open database. */
 pub struct Database {
@@ -55,7 +76,6 @@ pub struct Database {
 impl Database {
 
     //////// CONSTRUCTORS:
-
 
     /** Opens a database, or creates it if it doesn't exist yet, returning a new `Database`
         instance.
@@ -187,8 +207,17 @@ impl Database {
 
     /** Registers a database change listener function. It will be called after one or more
         documents are changed on disk. */
-    pub fn add_listener(&self, _listener: ChangeListener) -> ListenerToken {
-        todo!()
+    pub fn add_listener(&self, listener: ChangeListener) -> ListenerToken {
+        unsafe {
+            let callback: *mut ::std::os::raw::c_void = std::mem::transmute(listener);
+
+            ListenerToken {
+                _ref: CBLDatabase_AddChangeListener(self._ref, Some(c_change_listener), callback)
+            }
+        }
+
+        // TODO:Stocker callback + token dans Database
+        // TODO:Drop : supprimer listener
     }
 
     /** Switches the database to buffered-notification mode. Notifications for objects belonging

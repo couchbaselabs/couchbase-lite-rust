@@ -177,6 +177,15 @@ fn query() {
     });
 }
 
+#[test]
+fn query() {
+    with_db(|db| {
+            add_doc(db, "doc-1", 1, "one");
+            add_doc(db, "doc-2", 2, "two");
+            add_doc(db, "doc-3", 3, "three");
+    }
+}
+
 
 /*
 // This test doesn't and shouldn't compile -- it tests that the borrow-checker will correctly
