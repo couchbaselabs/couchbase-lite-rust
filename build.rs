@@ -29,8 +29,8 @@ use std::fs;
 use std::path::PathBuf;
 
 // Where to find the Couchbase Lite headers and library:    //TODO: Make this easily configurable
-static CBL_INCLUDE_DIR : &str   = "/usr/local/include";
-static CBL_LIB_DIR : &str       = "/usr/local/lib";
+static CBL_INCLUDE_DIR : &str   = "libcblite-3.0.1/include";
+static CBL_LIB_DIR : &str       = "libcblite-3.0.1/lib";
 static CBL_LIB_FILENAME : &str  = "libcblite.dylib";
 
 // Where to find Clang and LLVM libraries:
@@ -46,12 +46,15 @@ fn main() {
         println!("cargo:rustc-env=LIBCLANG_PATH={}", DEFAULT_LIBCLANG_PATH);
     }
 
+    let sdk_root = "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX12.3.sdk";
+
     // The bindgen::Builder is the main entry point
     // to bindgen, and lets you build up options for
     // the resulting bindings.
     let bindings = bindgen::Builder::default()
         // The input header we would like to generate bindings for.
         .header("src/wrapper.h")
+        //.header("libcblite-3.0.1/include/cbl/CouchbaseLite.h")
         // C '#include' search paths:
         .clang_arg("-I".to_owned() + CBL_INCLUDE_DIR)
         // Which symbols to generate bindings for:
@@ -61,6 +64,7 @@ fn main() {
         .whitelist_var("k?FL.*")
         .whitelist_function("CBL.*")
         .whitelist_function("_?FL.*")
+        .clang_arg(format!("-isysroot{}", sdk_root))
         // Tell cargo to invalidate the built crate whenever any of the
         // included header files changed.
         .parse_callbacks(Box::new(bindgen::CargoCallbacks))
