@@ -65,10 +65,8 @@ impl Database {
     pub fn open(name: &str, config: Option<DatabaseConfiguration>) -> Result<Database> {
         unsafe {
             if let Some(cfg) = config {
-                let c_config = CBLDatabaseConfiguration {
-                    directory:     as_slice(cfg.directory.to_str().unwrap()),
-                    //encryptionKey: ptr::null_mut() // TODO: EE
-                };
+                let mut c_config: CBLDatabaseConfiguration  = CBLDatabaseConfiguration_Default();
+                c_config.directory = as_slice(cfg.directory.to_str().unwrap());
                 return Database::_open(name, &c_config);
             } else {
                 return Database::_open(name, ptr::null())
