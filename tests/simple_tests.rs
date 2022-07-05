@@ -126,7 +126,7 @@ fn query() {
 #[test]
 fn in_transaction() {
     let path = Path::new("db");
-    let (_db_thread, db_exec) = utils::run_db_thread(path);
+    let (db_thread, db_exec) = utils::run_db_thread(path);
 
     db_exec.spawn(move |db| {
         if let Some(db) = db.as_mut() {
@@ -143,6 +143,9 @@ fn in_transaction() {
             assert!(db.get_document("document_error").is_err());
         }
     });
+
+    utils::close_db(db_thread, db_exec);
+    utils::delete_db(path);
 }
 
 fn transaction_callback(db: &mut Database) -> Result<String> {
