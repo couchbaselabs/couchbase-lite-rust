@@ -16,8 +16,6 @@
 //
 #![allow(unused_imports)]
 
-mod utils;
-
 extern crate couchbase_lite;
 extern crate tempdir;
 
@@ -188,67 +186,25 @@ fn query() {
 static mut DOCUMENT_DETECTED: bool = false;
 
 #[test]
-fn change_listener() {
-    let (db_thread_1, db_exec_1) = utils::run_db_thread(Path::new("test_db"));
-    db_exec_1.spawn(move |db| {
-        if let Some(db) = db.as_mut() {
-            db.add_listener(|_, doc_ids| {
-                if let Some(id) = doc_ids.first() {
-                    if "document_db_2" == id {
-                        unsafe {
-                            DOCUMENT_DETECTED = true;
-                        }
-                    }
-                }
-            });
-        } else {
-            eprintln!("db is NOT open");
+fn add_listener() {
+    let mut db = Database::open("db", None).unwrap();
+    let _listener_token = db.add_listener(| _, doc_ids| {
+        if doc_ids.first().unwrap() == "document" {
+            unsafe {
+                DOCUMENT_DETECTED = true;
+            }
         }
     });
 
-    let (db_thread_2, db_exec_2) = utils::run_db_thread(Path::new("test_db"));
-    add_document(&db_exec_2, "test".to_string());
+    let mut doc = Document::new_with_id("document");
+    db.save_document(&mut doc, ConcurrencyControl::LastWriteWins).unwrap();
+
+    let _doc1 = db.get_document("document");
 
     assert!(is_document_detected());
 
-    utils::close_db(db_thread_1, db_exec_1);
-    utils::close_db(db_thread_2, db_exec_2);
-
-    utils::delete_db(Path::new("test_db"));
-}
-
-fn add_document(db_exec: &utils::DbQueryExecutor, data: String) {
-    db_exec.spawn(move |db| {
-        if let Some(db) = db.as_mut() {
-            save_message(db, data.as_str(), Some("document_db_2")).unwrap();
-        } else {
-            eprintln!("db is NOT open");
-        }
-    });
-
-    //wait_for_replicators_idle();
-}
-
-fn save_message(
-    db: &mut Database,
-    data: &str,
-    doc_id: Option<&str>,
-) -> Result<()> {
-    let mut doc = if let Some(doc_id) = doc_id {
-        println!("save_message: edit message");
-        Document::new_with_id(doc_id)
-    } else {
-        Document::new()
-    };
-
-    let mut prop = doc.mutable_properties();
-    prop.at("msg").put_string(data);
-    prop.at("owner").put_string("qux");
-    println!("save_message: doc id {}", doc.id());
-
-    db.save_document(&mut doc, ConcurrencyControl::LastWriteWins)
-        .unwrap();
-    Ok(())
+    drop(_listener_token);
+    drop(db);
 }
 
 fn is_document_detected() -> bool {

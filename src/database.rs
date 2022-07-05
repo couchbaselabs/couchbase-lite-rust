@@ -54,7 +54,7 @@ unsafe extern "C" fn c_change_listener(
 ) {
     let callback: ChangeListener = std::mem::transmute(context);
 
-    let database = Database { _ref: db as *mut CBLDatabase };
+    let database = Database { _ref: db as *mut CBLDatabase, _has_ownership: false };
     let mut vec_doc_ids = Vec::new();
     for i in 0..num_docs {
         if let Some(doc_id) = c_doc_ids.offset(i as isize).as_ref() {
@@ -69,7 +69,8 @@ unsafe extern "C" fn c_change_listener(
 
 /** A connection to an open database. */
 pub struct Database {
-    pub(crate) _ref: *mut CBLDatabase
+    pub(crate) _ref: *mut CBLDatabase,
+    _has_ownership: bool
 }
 
 
@@ -101,7 +102,7 @@ impl Database {
         if db_ref.is_null() {
             return failure(err);
         }
-        return Ok(Database{_ref: db_ref});
+        return Ok(Database{_ref: db_ref, _has_ownership: true});
     }
 
 
@@ -241,8 +242,10 @@ impl Database {
 
 impl Drop for Database {
     fn drop(&mut self) {
-        unsafe {
-            release(self._ref)
+        if self._has_ownership {
+            unsafe {
+                release(self._ref)
+            }
         }
     }
 }
@@ -251,7 +254,7 @@ impl Drop for Database {
 impl Clone for Database {
     fn clone(&self) -> Self {
         unsafe {
-            return Database{_ref: retain(self._ref)}
+            return Database{_ref: retain(self._ref), _has_ownership: self._has_ownership }
         }
     }
 }
