@@ -187,6 +187,7 @@ fn query() {
     });
 }
 
+static mut BUFFER_NOTIFICATIONS: bool = false;
 static mut DOCUMENT_DETECTED: bool = false;
 
 #[test]
@@ -218,6 +219,71 @@ fn add_listener() {
 
     utils::close_db(db_thread, db_exec);
     utils::delete_db(path);
+
+    unsafe {
+        DOCUMENT_DETECTED = false;
+    }
+}
+
+#[test]
+fn buffer_notifications() {
+    let path = Path::new("db");
+
+    let (db_thread, db_exec) = utils::run_db_thread(path);
+
+    db_exec.spawn(move |db| {
+        if let Some(db) = db.as_mut() {
+            db.buffer_notifications(|_| {
+                unsafe {
+                    BUFFER_NOTIFICATIONS = true;
+                }
+            });
+
+            let listener_token = db.add_listener(| _, doc_ids| {
+                if doc_ids.first().unwrap() == "document" {
+                    unsafe {
+                        DOCUMENT_DETECTED = true;
+                    }
+                }
+            });
+
+            let mut doc = Document::new_with_id("document");
+            db.save_document(&mut doc, ConcurrencyControl::LastWriteWins).unwrap();
+
+            assert!(!is_document_detected());
+            assert!(is_buffer_notifications());
+
+            db.send_notifications();
+
+            assert!(is_document_detected());
+
+            drop(listener_token);
+        } else {
+            println!("Error: DB is NOT open");
+        }
+    });
+
+    utils::close_db(db_thread, db_exec);
+    utils::delete_db(path);
+
+    unsafe {
+        BUFFER_NOTIFICATIONS = false;
+        DOCUMENT_DETECTED = false;
+    }
+}
+
+fn is_buffer_notifications() -> bool {
+    let ten_seconds = time::Duration::from_secs(10);
+    let now = time::Instant::now();
+    let wait_fetch_document = time::Duration::from_millis(1000);
+
+    unsafe {
+        while !BUFFER_NOTIFICATIONS && now.elapsed() < ten_seconds {
+            thread::sleep(wait_fetch_document);
+        }
+
+        BUFFER_NOTIFICATIONS
+    }
 }
 
 fn is_document_detected() -> bool {
