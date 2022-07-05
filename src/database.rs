@@ -43,7 +43,6 @@ enum_from_primitive! {
 
 
 type ChangeListener = fn(db: &Database, doc_ids: Vec<String>);
-
 #[no_mangle]
 unsafe extern "C" fn c_change_listener(
     context: *mut ::std::os::raw::c_void,
@@ -67,6 +66,22 @@ unsafe extern "C" fn c_change_listener(
     }
 
     callback(&database, vec_doc_ids);
+}
+
+type BufferNotifications = fn(db: &Database);
+#[no_mangle]
+unsafe extern "C" fn c_buffer_notifications(
+    context: *mut ::std::os::raw::c_void,
+    db: *mut CBLDatabase
+) {
+    let callback: BufferNotifications = std::mem::transmute(context);
+
+    let database = Database {
+        _ref: db as *mut CBLDatabase,
+        has_ownership: false,
+    };
+
+    callback(&database);
 }
 
 /** A connection to an open database. */
@@ -230,8 +245,12 @@ impl Database {
         to this database (documents, queries, replicators, and of course the database) will not be
         called immediately; your callback function will be called instead. You can then call
         `send_notifications` when you're ready. */
-    pub fn buffer_notifications(&self, _callback: fn(&Database)) {
-        todo!()
+    pub fn buffer_notifications(&self, callback: BufferNotifications) {
+        unsafe {
+            let callback: *mut ::std::os::raw::c_void = std::mem::transmute(callback);
+
+            CBLDatabase_BufferNotifications(self._ref, Some(c_buffer_notifications), callback);
+        }
     }
 
     /** Immediately issues all pending notifications for this database, by calling their listener
