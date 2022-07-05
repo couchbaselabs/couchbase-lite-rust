@@ -54,7 +54,10 @@ unsafe extern "C" fn c_change_listener(
 ) {
     let callback: ChangeListener = std::mem::transmute(context);
 
-    let database = Database { _ref: db as *mut CBLDatabase, _has_ownership: false };
+    let database = Database {
+        _ref: db as *mut CBLDatabase,
+        has_ownership: false,
+    };
     let mut vec_doc_ids = Vec::new();
     for i in 0..num_docs {
         if let Some(doc_id) = c_doc_ids.offset(i as isize).as_ref() {
@@ -70,7 +73,7 @@ unsafe extern "C" fn c_change_listener(
 /** A connection to an open database. */
 pub struct Database {
     pub(crate) _ref: *mut CBLDatabase,
-    _has_ownership: bool
+    has_ownership: bool,
 }
 
 
@@ -102,7 +105,10 @@ impl Database {
         if db_ref.is_null() {
             return failure(err);
         }
-        return Ok(Database{_ref: db_ref, _has_ownership: true});
+        return Ok(Database{
+            _ref: db_ref,
+            has_ownership: true,
+        });
     }
 
 
@@ -207,8 +213,9 @@ impl Database {
 
 
     /** Registers a database change listener function. It will be called after one or more
-        documents are changed on disk. */
-    pub fn add_listener(&self, listener: ChangeListener) -> ListenerToken {
+        documents are changed on disk. Remember to keep the reference to the ChangeListener
+        if you want the callback to keep working. */
+    pub fn add_listener(&mut self, listener: ChangeListener) -> ListenerToken {
         unsafe {
             let callback: *mut ::std::os::raw::c_void = std::mem::transmute(listener);
 
@@ -216,9 +223,6 @@ impl Database {
                 _ref: CBLDatabase_AddChangeListener(self._ref, Some(c_change_listener), callback)
             }
         }
-
-        // TODO:Stocker callback + token dans Database
-        // TODO:Drop : supprimer listener
     }
 
     /** Switches the database to buffered-notification mode. Notifications for objects belonging
@@ -242,7 +246,7 @@ impl Database {
 
 impl Drop for Database {
     fn drop(&mut self) {
-        if self._has_ownership {
+        if self.has_ownership {
             unsafe {
                 release(self._ref)
             }
@@ -251,10 +255,13 @@ impl Drop for Database {
 }
 
 
-impl Clone for Database {
+/*impl Clone for Database {
     fn clone(&self) -> Self {
         unsafe {
-            return Database{_ref: retain(self._ref), _has_ownership: self._has_ownership }
+            return Database{
+                _ref: retain(self._ref),
+                has_ownership: self.has_ownership,
+            }
         }
     }
-}
+}*/

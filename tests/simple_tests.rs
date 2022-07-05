@@ -14,17 +14,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 //
-#![allow(unused_imports)]
 
 extern crate couchbase_lite;
 extern crate tempdir;
+
+mod utils;
 
 use couchbase_lite::*;
 use tempdir::TempDir;
 
 use std::{
     path::Path,
-    sync::{Arc, Mutex, mpsc},
     thread, time,
 };
 
@@ -187,24 +187,33 @@ static mut DOCUMENT_DETECTED: bool = false;
 
 #[test]
 fn add_listener() {
-    let mut db = Database::open("db", None).unwrap();
-    let _listener_token = db.add_listener(| _, doc_ids| {
-        if doc_ids.first().unwrap() == "document" {
-            unsafe {
-                DOCUMENT_DETECTED = true;
-            }
+    let path = Path::new("db");
+
+    let (db_thread, db_exec) = utils::run_db_thread(path);
+
+    db_exec.spawn(move |db| {
+        if let Some(db) = db.as_mut() {
+            let listener_token = db.add_listener(| _, doc_ids| {
+                if doc_ids.first().unwrap() == "document" {
+                    unsafe {
+                        DOCUMENT_DETECTED = true;
+                    }
+                }
+            });
+
+            let mut doc = Document::new_with_id("document");
+            db.save_document(&mut doc, ConcurrencyControl::LastWriteWins).unwrap();
+
+            assert!(is_document_detected());
+
+            drop(listener_token);
+        } else {
+            println!("Error: DB is NOT open");
         }
     });
 
-    let mut doc = Document::new_with_id("document");
-    db.save_document(&mut doc, ConcurrencyControl::LastWriteWins).unwrap();
-
-    let _doc1 = db.get_document("document");
-
-    assert!(is_document_detected());
-
-    drop(_listener_token);
-    drop(db);
+    utils::close_db(db_thread, db_exec);
+    utils::delete_db(path);
 }
 
 fn is_document_detected() -> bool {
