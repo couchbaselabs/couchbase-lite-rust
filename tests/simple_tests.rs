@@ -234,20 +234,6 @@ fn buffer_notifications() {
     utils::delete_db(path);
 }
 
-fn is_document_detected() -> bool {
-    let ten_seconds = time::Duration::from_secs(10);
-    let now = time::Instant::now();
-    let wait_fetch_document = time::Duration::from_millis(1000);
-
-    unsafe {
-        while !DOCUMENT_DETECTED && now.elapsed() < ten_seconds {
-            thread::sleep(wait_fetch_document);
-        }
-
-        DOCUMENT_DETECTED
-    }
-}
-
 /*
 // This test doesn't and shouldn't compile -- it tests that the borrow-checker will correctly
 // prevent Fleece data from being used after its document has been freed.
