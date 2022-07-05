@@ -23,11 +23,10 @@ use super::c_api::*;
 use std::path::*;
 use std::ptr;
 
-
 /** Database configuration options. */
 pub struct DatabaseConfiguration<'a> {
     pub directory:  &'a std::path::Path,
-    // TODO: encryptionKey field for EE
+    pub encryption_key: *mut CBLEncryptionKey,
 }
 
 
@@ -76,7 +75,6 @@ pub struct Database {
     has_ownership: bool,
 }
 
-
 impl Database {
 
     //////// CONSTRUCTORS:
@@ -91,6 +89,9 @@ impl Database {
             if let Some(cfg) = config {
                 let mut c_config: CBLDatabaseConfiguration  = CBLDatabaseConfiguration_Default();
                 c_config.directory = as_slice(cfg.directory.to_str().unwrap());
+                if let Some(encryption_key) = cfg.encryption_key.as_ref() {
+                    c_config.encryptionKey = *encryption_key;
+                }
                 return Database::_open(name, &c_config);
             } else {
                 return Database::_open(name, ptr::null())

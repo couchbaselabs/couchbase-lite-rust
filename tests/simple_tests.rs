@@ -25,6 +25,7 @@ use tempdir::TempDir;
 
 use std::{
     path::Path,
+    ptr,
     thread, time,
 };
 
@@ -61,7 +62,10 @@ fn with_db<F>(f: F)
 
     let start_inst_count = instance_count() as isize;
     let tmp_dir = TempDir::new("cbl_rust").expect("create temp dir");
-    let cfg = DatabaseConfiguration{directory: tmp_dir.path()};
+    let cfg = DatabaseConfiguration{
+        directory: tmp_dir.path(),
+        encryption_key: ptr::null_mut(),
+    };
     let mut db = Database::open(DB_NAME, Some(cfg)).expect("open db");
     assert!(Database::exists(DB_NAME, tmp_dir.path()));
 
