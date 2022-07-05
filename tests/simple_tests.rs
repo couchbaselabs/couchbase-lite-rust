@@ -16,14 +16,16 @@
 //
 
 extern crate couchbase_lite;
+extern crate lazy_static;
 
 use self::couchbase_lite::*;
+use lazy_static::lazy_static;
 
 mod utils;
 
 use std::{
     path::Path,
-    thread, time,
+    sync::{Arc, Mutex},
 };
 
 //////// TESTS:
@@ -121,11 +123,15 @@ fn query() {
     });
 }
 
-static mut BUFFER_NOTIFICATIONS: bool = false;
-static mut DOCUMENT_DETECTED: bool = false;
+lazy_static! {
+    static ref BUFFER_NOTIFICATIONS: Arc<Mutex<bool>> = Arc::new(Mutex::new(false));
+    static ref DOCUMENT_DETECTED: Arc<Mutex<bool>> = Arc::new(Mutex::new(false));
+}
 
 #[test]
 fn add_listener() {
+    utils::set_static(&DOCUMENT_DETECTED, false);
+
     let path = Path::new("db");
 
     let (db_thread, db_exec) = utils::run_db_thread(path);
@@ -134,16 +140,14 @@ fn add_listener() {
         if let Some(db) = db.as_mut() {
             let listener_token = db.add_listener(| _, doc_ids| {
                 if doc_ids.first().unwrap() == "document" {
-                    unsafe {
-                        DOCUMENT_DETECTED = true;
-                    }
+                    utils::set_static(&DOCUMENT_DETECTED, true);
                 }
             });
 
             let mut doc = Document::new_with_id("document");
             db.save_document(&mut doc, ConcurrencyControl::LastWriteWins).unwrap();
 
-            assert!(is_document_detected());
+            assert!(utils::check_static_with_wait(&DOCUMENT_DETECTED));
 
             drop(listener_token);
         } else {
@@ -153,14 +157,13 @@ fn add_listener() {
 
     utils::close_db(db_thread, db_exec);
     utils::delete_db(path);
-
-    unsafe {
-        DOCUMENT_DETECTED = false;
-    }
 }
 
 #[test]
 fn buffer_notifications() {
+    utils::set_static(&BUFFER_NOTIFICATIONS, false);
+    utils::set_static(&DOCUMENT_DETECTED, false);
+
     let path = Path::new("db");
 
     let (db_thread, db_exec) = utils::run_db_thread(path);
@@ -168,28 +171,24 @@ fn buffer_notifications() {
     db_exec.spawn(move |db| {
         if let Some(db) = db.as_mut() {
             db.buffer_notifications(|_| {
-                unsafe {
-                    BUFFER_NOTIFICATIONS = true;
-                }
+                utils::set_static(&BUFFER_NOTIFICATIONS, true);
             });
 
             let listener_token = db.add_listener(| _, doc_ids| {
                 if doc_ids.first().unwrap() == "document" {
-                    unsafe {
-                        DOCUMENT_DETECTED = true;
-                    }
+                    utils::set_static(&DOCUMENT_DETECTED, true);
                 }
             });
 
             let mut doc = Document::new_with_id("document");
             db.save_document(&mut doc, ConcurrencyControl::LastWriteWins).unwrap();
 
-            assert!(!is_document_detected());
-            assert!(is_buffer_notifications());
+            assert!(!utils::check_static_with_wait(&DOCUMENT_DETECTED));
+            assert!(utils::check_static_with_wait(&BUFFER_NOTIFICATIONS));
 
             db.send_notifications();
 
-            assert!(is_document_detected());
+            assert!(utils::check_static_with_wait(&DOCUMENT_DETECTED));
 
             drop(listener_token);
         } else {
@@ -199,39 +198,6 @@ fn buffer_notifications() {
 
     utils::close_db(db_thread, db_exec);
     utils::delete_db(path);
-
-    unsafe {
-        BUFFER_NOTIFICATIONS = false;
-        DOCUMENT_DETECTED = false;
-    }
-}
-
-fn is_buffer_notifications() -> bool {
-    let ten_seconds = time::Duration::from_secs(10);
-    let now = time::Instant::now();
-    let wait_fetch_document = time::Duration::from_millis(1000);
-
-    unsafe {
-        while !BUFFER_NOTIFICATIONS && now.elapsed() < ten_seconds {
-            thread::sleep(wait_fetch_document);
-        }
-
-        BUFFER_NOTIFICATIONS
-    }
-}
-
-fn is_document_detected() -> bool {
-    let ten_seconds = time::Duration::from_secs(10);
-    let now = time::Instant::now();
-    let wait_fetch_document = time::Duration::from_millis(1000);
-
-    unsafe {
-        while !DOCUMENT_DETECTED && now.elapsed() < ten_seconds {
-            thread::sleep(wait_fetch_document);
-        }
-
-        DOCUMENT_DETECTED
-    }
 }
 
 /*

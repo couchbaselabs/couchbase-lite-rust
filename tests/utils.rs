@@ -5,7 +5,12 @@ extern crate tempdir;
 use self::couchbase_lite::*;
 use self::tempdir::TempDir;
 
-use std::{ path::Path, ptr, sync::mpsc };
+use std::{
+    path::Path,
+    ptr,
+    sync::{Arc, Mutex, mpsc},
+    thread, time,
+};
 
 // Enables check for leaks of native CBL objects after `with_db()` finishes.
 // WARNING: These checks only work if one test method runs at a time, i.e. testing is single
@@ -66,6 +71,30 @@ pub fn add_doc(db: &mut Database, id: &str, i: i64, s: &str) {
     props.at("i").put_i64(i);
     props.at("s").put_string(s);
     db.save_document(&mut doc, ConcurrencyControl::FailOnConflict).expect("save");
+}
+
+pub fn check_static_with_wait(st: &Arc<Mutex<bool>>) -> bool {
+    let ten_seconds = time::Duration::from_secs(10);
+    let now = time::Instant::now();
+    let wait_fetch_document = time::Duration::from_millis(1000);
+
+    while !is_static_true(&st) && now.elapsed() < ten_seconds {
+        thread::sleep(wait_fetch_document);
+    }
+
+    is_static_true(&st)
+}
+pub fn is_static_true(st: &Arc<Mutex<bool>>) -> bool {
+    if let Ok(st) = st.lock() {
+        *st
+    } else {
+        false
+    }
+}
+pub fn set_static(st: &Arc<Mutex<bool>>, value: bool) {
+    if let Ok(mut st) = st.lock() {
+        *st = value;
+    }
 }
 
 pub fn close_db(db_thread: std::thread::JoinHandle<()>, db_exec: DbQueryExecutor) {
