@@ -187,6 +187,41 @@ fn query() {
     });
 }
 
+
+#[test]
+fn in_transaction() {
+    let path = Path::new("db");
+    let (_db_thread, db_exec) = utils::run_db_thread(path);
+
+    db_exec.spawn(move |db| {
+        if let Some(db) = db.as_mut() {
+            let result = db.in_transaction(transaction_callback);
+
+            assert!(result.is_ok());
+            assert_eq!(result.unwrap(), "document");
+
+            let result = db.in_transaction(transaction_callback_error);
+
+            assert!(result.is_err());
+
+            assert!(db.get_document("document").is_ok());
+            assert!(db.get_document("document_error").is_err());
+        }
+    });
+}
+
+fn transaction_callback(db: &mut Database) -> Result<String> {
+    let mut doc = Document::new_with_id("document");
+    db.save_document(&mut doc, ConcurrencyControl::LastWriteWins).unwrap();
+    Ok("document".to_string())
+}
+
+fn transaction_callback_error(db: &mut Database) -> Result<String> {
+    let mut doc = Document::new_with_id("document_error");
+    db.save_document(&mut doc, ConcurrencyControl::LastWriteWins).unwrap();
+    Err(couchbase_lite::Error::default())
+}
+
 static mut DOCUMENT_DETECTED: bool = false;
 
 #[test]

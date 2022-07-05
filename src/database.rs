@@ -180,21 +180,20 @@ impl Database {
          - Changes will not be visible to other Database instances on the same database until
                 the transaction ends.
          - Transactions can nest. Changes are not committed until the outer one ends. */
-   pub fn in_transaction<T>(&self, callback: fn()->T) -> Result<T> {
+   pub fn in_transaction<T>(&mut self, callback: fn(&mut Database)->Result<T>) -> Result<T> {
         let mut err = CBLError::default();
         unsafe {
             if ! CBLDatabase_BeginTransaction(self._ref, &mut err) {
                 return failure(err);
             }
         }
-        let result = callback();
-        // TODO: Allow failure in callback, and abort transaction
+        let result = callback(self);
         unsafe {
-            if ! CBLDatabase_EndTransaction(self._ref, true, &mut err) {
+            if ! CBLDatabase_EndTransaction(self._ref, result.is_ok(), &mut err) {
                 return failure(err);
             }
         }
-        return Ok(result);
+        return result;
     }
 
 
