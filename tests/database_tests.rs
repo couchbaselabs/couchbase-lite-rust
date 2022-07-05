@@ -21,7 +21,7 @@ extern crate lazy_static;
 use self::couchbase_lite::*;
 use lazy_static::lazy_static;
 
-mod utils;
+pub mod utils;
 
 use std::{
     path::Path,
@@ -35,91 +35,6 @@ fn db_properties() {
     utils::with_db(|db| {
         assert_eq!(db.name(), utils::DB_NAME);
         assert_eq!(db.count(), 0);
-    });
-}
-
-#[test]
-fn create_document() {
-    utils::with_db(|_db| {
-        let doc = Document::new_with_id("foo");
-        assert_eq!(doc.id(), "foo");
-        assert_eq!(doc.sequence(), 0);
-        assert!(doc.properties());
-        assert_eq!(doc.properties().count(), 0);
-    });
-}
-
-#[test]
-fn save_document() {
-    utils::with_db(|db| {
-        {
-            let mut doc = Document::new_with_id("foo");
-            let mut props = doc.mutable_properties();
-            props.at("i").put_i64(1234);
-            props.at("s").put_string("Hello World!");
-
-            db.save_document(&mut doc, ConcurrencyControl::FailOnConflict).expect("save");
-        }
-        {
-            let doc = db.get_document("foo").expect("reload document");
-            let props = doc.properties();
-            verbose!("Blah blah blah");
-            info!("Interesting: {} = {}", 2+2, 4);
-            warn!("This is a warning");
-            error!("Oh no, props = {}", props);
-            assert_eq!(props.to_json(), r#"{"i":1234,"s":"Hello World!"}"#);
-        }
-    });
-}
-
-#[test]
-fn query() {
-    utils::with_db(|db| {
-        utils::add_doc(db, "doc-1", 1, "one");
-        utils::add_doc(db, "doc-2", 2, "two");
-        utils::add_doc(db, "doc-3", 3, "three");
-
-        let query = Query::new(db, QueryLanguage::N1QL, "select i, s from _ where i > 1 order by i").expect("create query");
-        assert_eq!(query.column_count(), 2);
-        assert_eq!(query.column_name(0), Some("i"));
-        assert_eq!(query.column_name(1), Some("s"));
-
-        // Step through the iterator manually:
-        let results = query.execute().expect("execute");
-        let mut row = (&results).next().unwrap(); //FIXME: Do something about the (&results). requirement
-        let mut i = row.get(0).as_i64().unwrap();
-        let mut s = row.get(1).as_string().unwrap();
-        assert_eq!(i, 2);
-        assert_eq!(s, "two");
-        assert_eq!(row.as_dict().to_json(), r#"{"i":2,"s":"two"}"#);
-
-        row = (&results).next().unwrap();
-        i = row.get(0).as_i64().unwrap();
-        s = row.get(1).as_string().unwrap();
-        assert_eq!(i, 3);
-        assert_eq!(s, "three");
-        assert_eq!(row.as_dict().to_json(), r#"{"i":3,"s":"three"}"#);
-
-        assert!((&results).next().is_none());
-
-        // Now try a for...in loop:
-        let mut n = 0;
-        for row in &query.execute().expect("execute") {
-            match n {
-                0 => {
-                    assert_eq!(row.as_array().to_json(), r#"[2,"two"]"#);
-                    assert_eq!(row.as_dict().to_json(), r#"{"i":2,"s":"two"}"#);
-                },
-                1 => {
-                    assert_eq!(row.as_array().to_json(), r#"[3,"three"]"#);
-                    assert_eq!(row.as_dict().to_json(), r#"{"i":3,"s":"three"}"#);
-                },
-                _ => {panic!("Too many rows ({})", n);}
-            }
-            n += 1;
-
-        }
-        assert_eq!(n, 2);
     });
 }
 

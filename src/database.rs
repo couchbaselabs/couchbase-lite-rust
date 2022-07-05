@@ -272,15 +272,3 @@ impl Drop for Database {
         }
     }
 }
-
-
-/*impl Clone for Database {
-    fn clone(&self) -> Self {
-        unsafe {
-            return Database{
-                _ref: retain(self._ref),
-                has_ownership: self.has_ownership,
-            }
-        }
-    }
-}*/
