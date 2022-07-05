@@ -23,11 +23,10 @@ use super::c_api::*;
 use std::path::*;
 use std::ptr;
 
-
 /** Database configuration options. */
 pub struct DatabaseConfiguration<'a> {
     pub directory:  &'a std::path::Path,
-    // TODO: encryptionKey field for EE
+    pub encryption_key: *mut CBLEncryptionKey,
 }
 
 
@@ -44,18 +43,56 @@ enum_from_primitive! {
 
 
 type ChangeListener = fn(db: &Database, doc_ids: Vec<String>);
+#[no_mangle]
+unsafe extern "C" fn c_change_listener(
+    context: *mut ::std::os::raw::c_void,
+    db: *const CBLDatabase,
+    num_docs: ::std::os::raw::c_uint,
+    c_doc_ids: *mut FLString,
+) {
+    let callback: ChangeListener = std::mem::transmute(context);
 
+    let database = Database {
+        _ref: db as *mut CBLDatabase,
+        has_ownership: false,
+    };
+    let mut vec_doc_ids = Vec::new();
+    for i in 0..num_docs {
+        if let Some(doc_id) = c_doc_ids.offset(i as isize).as_ref() {
+            if let Some(doc_id) = doc_id.to_string() {
+                vec_doc_ids.push(doc_id.to_string())
+            }
+        }
+    }
+
+    callback(&database, vec_doc_ids);
+}
+
+type BufferNotifications = fn(db: &Database);
+#[no_mangle]
+unsafe extern "C" fn c_buffer_notifications(
+    context: *mut ::std::os::raw::c_void,
+    db: *mut CBLDatabase
+) {
+    let callback: BufferNotifications = std::mem::transmute(context);
+
+    let database = Database {
+        _ref: db as *mut CBLDatabase,
+        has_ownership: false,
+    };
+
+    callback(&database);
+}
 
 /** A connection to an open database. */
 pub struct Database {
-    pub(crate) _ref: *mut CBLDatabase
+    pub(crate) _ref: *mut CBLDatabase,
+    has_ownership: bool,
 }
-
 
 impl Database {
 
     //////// CONSTRUCTORS:
-
 
     /** Opens a database, or creates it if it doesn't exist yet, returning a new `Database`
         instance.
@@ -67,6 +104,9 @@ impl Database {
             if let Some(cfg) = config {
                 let mut c_config: CBLDatabaseConfiguration  = CBLDatabaseConfiguration_Default();
                 c_config.directory = as_slice(cfg.directory.to_str().unwrap());
+                if let Some(encryption_key) = cfg.encryption_key.as_ref() {
+                    c_config.encryptionKey = *encryption_key;
+                }
                 return Database::_open(name, &c_config);
             } else {
                 return Database::_open(name, ptr::null())
@@ -81,7 +121,10 @@ impl Database {
         if db_ref.is_null() {
             return failure(err);
         }
-        return Ok(Database{_ref: db_ref});
+        return Ok(Database{
+            _ref: db_ref,
+            has_ownership: true,
+        });
     }
 
 
@@ -137,21 +180,20 @@ impl Database {
          - Changes will not be visible to other Database instances on the same database until
                 the transaction ends.
          - Transactions can nest. Changes are not committed until the outer one ends. */
-   pub fn in_transaction<T>(&self, callback: fn()->T) -> Result<T> {
+   pub fn in_transaction<T>(&mut self, callback: fn(&mut Database)->Result<T>) -> Result<T> {
         let mut err = CBLError::default();
         unsafe {
             if ! CBLDatabase_BeginTransaction(self._ref, &mut err) {
                 return failure(err);
             }
         }
-        let result = callback();
-        // TODO: Allow failure in callback, and abort transaction
+        let result = callback(self);
         unsafe {
-            if ! CBLDatabase_EndTransaction(self._ref, true, &mut err) {
+            if ! CBLDatabase_EndTransaction(self._ref, result.is_ok(), &mut err) {
                 return failure(err);
             }
         }
-        return Ok(result);
+        return result;
     }
 
 
@@ -186,17 +228,28 @@ impl Database {
 
 
     /** Registers a database change listener function. It will be called after one or more
-        documents are changed on disk. */
-    pub fn add_listener(&self, _listener: ChangeListener) -> ListenerToken {
-        todo!()
+        documents are changed on disk. Remember to keep the reference to the ChangeListener
+        if you want the callback to keep working. */
+    pub fn add_listener(&mut self, listener: ChangeListener) -> ListenerToken {
+        unsafe {
+            let callback: *mut ::std::os::raw::c_void = std::mem::transmute(listener);
+
+            ListenerToken {
+                _ref: CBLDatabase_AddChangeListener(self._ref, Some(c_change_listener), callback)
+            }
+        }
     }
 
     /** Switches the database to buffered-notification mode. Notifications for objects belonging
         to this database (documents, queries, replicators, and of course the database) will not be
         called immediately; your callback function will be called instead. You can then call
         `send_notifications` when you're ready. */
-    pub fn buffer_notifications(&self, _callback: fn(&Database)) {
-        todo!()
+    pub fn buffer_notifications(&self, callback: BufferNotifications) {
+        unsafe {
+            let callback: *mut ::std::os::raw::c_void = std::mem::transmute(callback);
+
+            CBLDatabase_BufferNotifications(self._ref, Some(c_buffer_notifications), callback);
+        }
     }
 
     /** Immediately issues all pending notifications for this database, by calling their listener
@@ -212,17 +265,10 @@ impl Database {
 
 impl Drop for Database {
     fn drop(&mut self) {
-        unsafe {
-            release(self._ref)
-        }
-    }
-}
-
-
-impl Clone for Database {
-    fn clone(&self) -> Self {
-        unsafe {
-            return Database{_ref: retain(self._ref)}
+        if self.has_ownership {
+            unsafe {
+                release(self._ref)
+            }
         }
     }
 }

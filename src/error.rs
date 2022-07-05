@@ -128,6 +128,10 @@ enum_from_primitive! {
 
 
 impl Error {
+    pub fn default() -> Error {
+        Error::new(&CBLError::default())
+    }
+
     pub(crate) fn new(err: &CBLError) -> Error {
         Error{code: ErrorCode::new(err), internal_info: Some(err.internal_info)}
     }

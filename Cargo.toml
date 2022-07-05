@@ -5,6 +5,7 @@ version = "0.2.0"
 [dependencies]
 enum_primitive = "*"
 tempdir = "*"
+lazy_static = "1.4.0"
 
 [build-dependencies]
 bindgen = "0.53.1"
