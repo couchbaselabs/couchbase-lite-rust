@@ -18,7 +18,9 @@
 #![allow(non_upper_case_globals)]
 
 use slice::as_slice;
+use slice::bytes_as_slice;
 
+use std::collections::HashMap;
 use std::collections::HashSet;
 use std::ptr;
 
@@ -186,7 +188,7 @@ unsafe extern "C" fn c_replication_push_filter(
 ) -> bool {
     let repl_conf_context: *const ReplicationConfigurationContext = std::mem::transmute(context);
 
-    let document = Document::wrap(document as *mut CBLDocument);
+    let document = Document::retain(document as *mut CBLDocument);
 
     let (is_deleted, is_access_removed) = read_document_flags(flags);
 
@@ -201,7 +203,7 @@ unsafe extern "C" fn c_replication_pull_filter(
 ) -> bool {
     let repl_conf_context: *const ReplicationConfigurationContext = std::mem::transmute(context);
 
-    let document = Document::wrap(document as *mut CBLDocument);
+    let document = Document::retain(document as *mut CBLDocument);
 
     let (is_deleted, is_access_removed) = read_document_flags(flags);
 
@@ -230,14 +232,14 @@ unsafe extern "C" fn c_replication_conflict_resolver(
 
     let doc_id = document_id.to_string().unwrap_or("".to_string());
     let local_document = if local_document.is_null() {
-        Some(Document::wrap(local_document as *mut CBLDocument))
-    } else {
         None
+    } else {
+        Some(Document::retain(local_document as *mut CBLDocument))
     };
     let remote_document = if remote_document.is_null() {
-        Some(Document::wrap(remote_document as *mut CBLDocument))
-    } else {
         None
+    } else {
+        Some(Document::retain(remote_document as *mut CBLDocument))
     };
 
     if let Some(callback) = (*repl_conf_context).conflict_resolver {
@@ -257,11 +259,11 @@ pub type PropertyEncryptor = fn(
     document_id: Option<String>,
     properties: Dict,
     key_path: Option<String>,
-    input: Option<String>,
+    input: Option<Vec<u8>>,
     algorithm: Option<String>,
     kid: Option<String>,
     error: &Error
-) -> String;
+) -> Vec<u8>;
 #[no_mangle]
 pub extern "C" fn c_property_encryptor(
     context: *mut ::std::os::raw::c_void,
@@ -284,13 +286,13 @@ pub extern "C" fn c_property_encryptor(
                     document_id.to_string(),
                     Dict::wrap(properties, &properties),
                     key_path.to_string(),
-                    input.to_string(),
+                    input.to_vec(),
                     algorithm.as_ref().and_then(|s| s.to_string()),
                     kid.as_ref().and_then(|s| s.to_string()),
                     &error,
                 )
             })
-            .map(|s| FLSlice_Copy(as_slice(&s)))
+            .map(|v| FLSlice_Copy(bytes_as_slice(&v[..])))
             .unwrap_or(FLSliceResult_New(0));
 
         if !cbl_error.is_null() {
@@ -308,11 +310,11 @@ pub type PropertyDecryptor = fn(
     document_id: Option<String>,
     properties: Dict,
     key_path: Option<String>,
-    input: Option<String>,
+    input: Option<Vec<u8>>,
     algorithm: Option<String>,
     kid: Option<String>,
     error: &Error
-) -> String;
+) -> Vec<u8>;
 #[no_mangle]
 pub extern "C" fn c_property_decryptor(
     context: *mut ::std::os::raw::c_void,
@@ -335,13 +337,13 @@ pub extern "C" fn c_property_decryptor(
                     document_id.to_string(),
                     Dict::wrap(properties, &properties),
                     key_path.to_string(),
-                    input.to_string(),
+                    input.to_vec(),
                     algorithm.to_string(),
                     kid.to_string(),
                     &error,
                 )
             })
-            .map(|s| FLSlice_Copy(as_slice(&s)))
+            .map(|v| FLSlice_Copy(bytes_as_slice(&v[..])))
             .unwrap_or(FLSliceResult_New(0));
 
         if !cbl_error.is_null() {
@@ -362,8 +364,8 @@ struct ReplicationConfigurationContext {
 
 /** The configuration of a replicator. */
 pub struct ReplicatorConfiguration<'c> {
-    pub database:                  Database,                     // The database to replicate
-    pub endpoint:                  Endpoint,                     // The address of the other database to replicate with
+    pub database:                  Database,                         // The database to replicate
+    pub endpoint:                  Endpoint,                         // The address of the other database to replicate with
     pub replicator_type:           ReplicatorType,                   // Push, pull or both
     pub continuous:                bool,                             // Continuous replication?
     //-- Auto Purge:
@@ -383,15 +385,15 @@ pub struct ReplicatorConfiguration<'c> {
     pub max_attempt_wait_time:     u32,	                             //< Max wait time between retry attempts in seconds. Specify 0 to use the default value of 300 seconds.
     //-- WebSocket:
     pub heartbeat:                 u32,                              //< The heartbeat interval in seconds. Specify 0 to use the default value of 300 seconds.
-    pub authenticator:             Option<Authenticator>,                // Authentication credentials, if needed
+    pub authenticator:             Option<Authenticator>,            // Authentication credentials, if needed
     pub proxy:                     Option<ProxySettings>,            // HTTP client proxy settings
-    pub headers:                   Dict<'c>,                     // Extra HTTP headers to add to the WebSocket request
+    pub headers:                   HashMap<String, String>,          // Extra HTTP headers to add to the WebSocket request
     //-- TLS settings:
-    pub pinned_server_certificate: Option<&'c [u8]>,                  // An X.509 cert to "pin" TLS connections to (PEM or DER)
-    pub trusted_root_certificates: Option<&'c [u8]>,                  // Set of anchor certs (PEM format)
+    pub pinned_server_certificate: Option<&'c [u8]>,                 // An X.509 cert to "pin" TLS connections to (PEM or DER)
+    pub trusted_root_certificates: Option<&'c [u8]>,                 // Set of anchor certs (PEM format)
     //-- Filtering:
-    pub channels:                  Array<'c>,             // Optional set of channels to pull from
-    pub document_ids:              Array<'c>,             // Optional set of document IDs to replicate
+    pub channels:                  Array<'c>,                        // Optional set of channels to pull from
+    pub document_ids:              Array<'c>,                        // Optional set of document IDs to replicate
     pub push_filter:               Option<ReplicationFilter>,        // Optional callback to filter which docs are pushed
     pub pull_filter:               Option<ReplicationFilter>,        // Optional callback to validate incoming docs
     pub conflict_resolver:         Option<ConflictResolver>,         // Optional conflict-resolver callback
@@ -406,7 +408,7 @@ impl<'c> From<&'c CBLReplicatorConfiguration> for ReplicatorConfiguration<'c> {
             let context: *const ReplicationConfigurationContext = std::mem::transmute(config.context);
 
             ReplicatorConfiguration {
-                database: Database::new_no_retain(config.database),
+                database: Database::wrap(config.database),
                 endpoint: Endpoint { _ref: config.endpoint },
                 replicator_type: config.replicatorType.into(),
                 continuous: config.continuous,
@@ -420,7 +422,7 @@ impl<'c> From<&'c CBLReplicatorConfiguration> for ReplicatorConfiguration<'c> {
                     Some(Authenticator { _ref: retain(config.authenticator) })
                 },
                 proxy: config.proxy.as_ref().map(|proxy| proxy.into()),
-                headers: Dict::wrap(config.headers, &config.headers),
+                headers: Dict::wrap(config.headers, &config.headers).mutable_copy().to_hashmap(),
                 pinned_server_certificate: config.pinnedServerCertificate.as_byte_array(),
                 trusted_root_certificates: config.trustedRootCertificates.as_byte_array(),
                 channels: Array::wrap(config.channels, &config.channels),
@@ -461,7 +463,7 @@ impl<'c> From<ReplicatorConfiguration<'c>> for CBLReplicatorConfiguration {
                 heartbeat: config.heartbeat,
                 authenticator: config.authenticator.map(|a| a._ref).unwrap_or(ptr::null_mut()),
                 proxy: proxy,
-                headers: config.headers._ref,
+                headers: MutableDict::from_hashmap(&config.headers).as_dict()._ref,
                 pinnedServerCertificate: config.pinned_server_certificate.map(|c| slice::bytes_as_slice(c)).unwrap_or(slice::NULL_SLICE),
                 trustedRootCertificates: config.trusted_root_certificates.map(|c| slice::bytes_as_slice(c)).unwrap_or(slice::NULL_SLICE),
                 channels: config.channels._ref,
@@ -470,8 +472,8 @@ impl<'c> From<ReplicatorConfiguration<'c>> for CBLReplicatorConfiguration {
                 pullFilter: (*context).pull_filter.and(Some(c_replication_pull_filter)),
                 conflictResolver: (*context).conflict_resolver.and(Some(c_replication_conflict_resolver)),
                 context: std::mem::transmute(context),
-                propertyEncryptor: (*context).push_filter.and(Some(c_property_encryptor)),
-                propertyDecryptor: (*context).push_filter.and(Some(c_property_decryptor)),
+                propertyEncryptor: (*context).property_encryptor.and(Some(c_property_encryptor)),
+                propertyDecryptor: (*context).property_decryptor.and(Some(c_property_decryptor)),
             }
         }
     }
@@ -598,12 +600,14 @@ impl From<u8> for ReplicatorActivityLevel {
     replication progresses. The value is very approximate and may bounce around during replication;
     making it more accurate would require slowing down the replicator and incurring more load on the
     server. It's fine to use in a progress bar, though. */
+#[derive(Debug)]
 pub struct ReplicatorProgress {
     pub fraction_complete: f32,     // Very-approximate completion, from 0.0 to 1.0
     pub document_count:    u64      // Number of documents transferred so far
 }
 
 /** A replicator's current status. */
+#[derive(Debug)]
 pub struct ReplicatorStatus {
     pub activity: ReplicatorActivityLevel,  // Current state
     pub progress: ReplicatorProgress,       // Approximate fraction complete

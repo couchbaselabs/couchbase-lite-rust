@@ -16,20 +16,22 @@
 //
 
 extern crate couchbase_lite;
+extern crate lazy_static;
 
 use self::couchbase_lite::*;
+use encryptable::Encryptable;
+use lazy_static::lazy_static;
+
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
 
 pub mod utils;
-
-use std::{ thread, time };
 
 //////// TESTS:
 
 #[test]
 fn config() {
     utils::with_db(|db| {
-        let headers_mut = MutableDict::new();
-
         let repl_config_in = ReplicatorConfiguration {
             database: db.clone(),
             endpoint: Endpoint::new_with_url("ws://localhost:4984/billeo-db".to_string()).unwrap(),
@@ -47,7 +49,7 @@ fn config() {
                 username: Some("username".to_string()),
                 password: Some("password".to_string()),
             }),
-            headers: headers_mut.as_dict(),
+            headers: HashMap::new(),
             pinned_server_certificate: None,
             trusted_root_certificates: None,
             channels: Array::default(),
@@ -76,67 +78,270 @@ fn config() {
         assert_eq!(proxy.port, 3000);
         assert_eq!(proxy.username, Some("username".to_string()));
         assert_eq!(proxy.password, Some("password".to_string()));
-        assert_eq!(repl_config_out.headers, headers_mut.as_dict());
+        assert_eq!(repl_config_out.headers, HashMap::new());
     });
 }
 
 #[test]
 fn basic_local_replication() {
-    utils::with_three_dbs(|local_db1, _local_db2, central_db| {
-        // Create replicator
-        let headers_mut = MutableDict::new();
+    let config1: utils::ReplicationTestConfiguration = Default::default();
+    let config2: utils::ReplicationTestConfiguration = Default::default();
 
-        let repl_config = ReplicatorConfiguration {
-            database: local_db1.clone(),
-            endpoint: Endpoint::new_with_local_db(central_db),
-            replicator_type: ReplicatorType::PushAndPull,
-            continuous: true,
-            disable_auto_purge: true,
-            max_attempts: 4,
-            max_attempt_wait_time: 100,
-            heartbeat: 120,
-            authenticator: None,
-            proxy: None,
-            headers: headers_mut.as_dict(),
-            pinned_server_certificate: None,
-            trusted_root_certificates: None,
-            channels: Array::default(),
-            document_ids: Array::default(),
-            push_filter: None,
-            pull_filter: None,
-            conflict_resolver: None,
-            property_encryptor: None,
-            property_decryptor: None,
-        };
-
-        let mut repl = Replicator::new(repl_config).unwrap();
-
-        // Start replication
-        repl.start(false);
-
+    utils::with_three_dbs(config1, config2, |local_db1, local_db2, central_db, _repl1, _repl2| {
         // Save doc
-        let mut doc = Document::new_with_id("foo");
-        let mut props = doc.mutable_properties();
-        props.at("i").put_i64(1234);
-        props.at("s").put_string("Hello World!");
+        utils::add_doc(local_db1, "foo", 1234, "Hello World!");
 
-        local_db1.save_document_with_concurency_control(&mut doc, ConcurrencyControl::FailOnConflict).expect("save");
+        // Check if replication to central
+        assert!(utils::check_callback_with_wait(|| central_db.get_document("foo").is_ok(), None));
 
-        // Check if replication
-        let ten_seconds = time::Duration::from_secs(10);
-        let now = time::Instant::now();
-        let wait_fetch_document = time::Duration::from_millis(1000);
+        // Check if replication to DB 2
+        assert!(utils::check_callback_with_wait(|| local_db2.get_document("foo").is_ok(), None));
+    });
+}
 
-        let mut doc_found = false;
-        while !doc_found && now.elapsed() < ten_seconds {
-            let doc = central_db.get_document("foo");
-            doc_found = doc.is_ok();
-            thread::sleep(wait_fetch_document);
+#[test]
+fn pull_type_not_pushing() {
+    let config1 = utils::ReplicationTestConfiguration {
+        replicator_type: ReplicatorType::Pull,
+        ..Default::default()
+    };
+    let config2: utils::ReplicationTestConfiguration = Default::default();
+
+    utils::with_three_dbs(config1, config2, |local_db1, local_db2, central_db, _repl1, _repl2| {
+        // Save doc in DB 1
+        utils::add_doc(local_db1, "foo", 1234, "Hello World!");
+
+        // Check the replication process is not pushing to central
+        assert!(!utils::check_callback_with_wait(|| central_db.get_document("foo").is_ok(), None));
+
+        // Save doc in DB 2
+        utils::add_doc(local_db2, "foo2", 1234, "Hello World!");
+
+        // Check 'foo2' is pulled in DB 1
+        assert!(utils::check_callback_with_wait(|| central_db.get_document("foo2").is_ok(), None));
+        assert!(utils::check_callback_with_wait(|| local_db1.get_document("foo2").is_ok(), None));
+    });
+}
+
+#[test]
+fn push_type_not_pulling() {
+    let config1 = Default::default();
+    let config2 = utils::ReplicationTestConfiguration {
+        replicator_type: ReplicatorType::Push,
+        ..Default::default()
+    };
+
+    utils::with_three_dbs(config1, config2, |local_db1, local_db2, central_db, _repl1, _repl2| {
+        // Save doc in DB 1
+        utils::add_doc(local_db1, "foo", 1234, "Hello World!");
+
+        // Check if replication to central
+        assert!(utils::check_callback_with_wait(|| central_db.get_document("foo").is_ok(), None));
+
+        // Check the replication process is not pulling to DB 2
+        assert!(!utils::check_callback_with_wait(|| local_db2.get_document("foo").is_ok(), None));
+
+        // Save doc in DB 2
+        utils::add_doc(local_db2, "foo2", 1234, "Hello World!");
+
+        // Check 'foo2' is pushed in central
+        assert!(utils::check_callback_with_wait(|| central_db.get_document("foo2").is_ok(), None));
+    });
+}
+
+#[test]
+fn continuous() {
+    let config1 = utils::ReplicationTestConfiguration {
+        continuous: false,
+        ..Default::default()
+    };
+    let config2: utils::ReplicationTestConfiguration = Default::default();
+
+    utils::with_three_dbs(config1, config2, |local_db1, _local_db2, central_db, repl1, _repl2| {
+        // Save doc
+        utils::add_doc(local_db1, "foo", 1234, "Hello World!");
+
+        // Check the replication process is not running automatically
+        assert!(!utils::check_callback_with_wait(|| central_db.get_document("foo").is_ok(), None));
+
+        // Manually trigger the replication
+        repl1.start(false);
+
+        // Check the replication was successful
+        assert!(utils::check_callback_with_wait(|| central_db.get_document("foo").is_ok(), None));
+    });
+}
+
+#[test]
+fn document_ids() {
+    let mut array = MutableArray::new();
+    array.append().put_string("foo");
+    array.append().put_string("foo3");
+    let config1 = utils::ReplicationTestConfiguration {
+        document_ids: array.as_array(),
+        ..Default::default()
+    };
+    let config2: utils::ReplicationTestConfiguration = Default::default();
+
+    utils::with_three_dbs(config1, config2, |local_db1, _local_db2, central_db, _repl1, _repl2| {
+        // Save doc 'foo' and 'foo2'
+        utils::add_doc(local_db1, "foo", 1234, "Hello World!");
+        utils::add_doc(local_db1, "foo2", 1234, "Hello World!");
+
+        // Check only foo is replicated
+        assert!(utils::check_callback_with_wait(|| central_db.get_document("foo").is_ok(), None));
+        assert!(!utils::check_callback_with_wait(|| central_db.get_document("foo2").is_ok(), None));
+    });
+}
+
+#[test]
+fn push_and_pull_filter() {
+    let config1 = utils::ReplicationTestConfiguration {
+        push_filter: Some(|document, _is_deleted, _is_access_removed| document.id() == "foo" || document.id() == "foo2"),
+        ..Default::default()
+    };
+    let config2 = utils::ReplicationTestConfiguration {
+        pull_filter: Some(|document, _is_deleted, _is_access_removed| document.id() == "foo2" || document.id() == "foo3"),
+        ..Default::default()
+    };
+
+    utils::with_three_dbs(config1, config2, |local_db1, local_db2, central_db, _repl1, _repl2| {
+        // Save doc 'foo', 'foo2' & 'foo3'
+        utils::add_doc(local_db1, "foo", 1234, "Hello World!");
+        utils::add_doc(local_db1, "foo2", 1234, "Hello World!");
+        utils::add_doc(local_db1, "foo3", 1234, "Hello World!");
+
+        // Check only 'foo' and 'foo2' were replicated to central
+        assert!(utils::check_callback_with_wait(|| central_db.get_document("foo").is_ok(), None));
+        assert!(utils::check_callback_with_wait(|| central_db.get_document("foo2").is_ok(), None));
+        assert!(!utils::check_callback_with_wait(|| central_db.get_document("foo3").is_ok(), None));
+
+        // Check only foo2' were replicated to DB 2
+        assert!(!utils::check_callback_with_wait(|| local_db2.get_document("foo").is_ok(), None));
+        assert!(utils::check_callback_with_wait(|| local_db2.get_document("foo2").is_ok(), None));
+    });
+}
+
+lazy_static! {
+    static ref CONFLICT_DETECTED: Arc<Mutex<bool>> = Arc::new(Mutex::new(false));
+}
+
+#[test]
+fn conflict_resolver() {
+    utils::set_static(&CONFLICT_DETECTED, false);
+
+    let config1 = utils::ReplicationTestConfiguration {
+        conflict_resolver: Some(|_document_id, _local_document, remote_document| {
+            utils::set_static(&CONFLICT_DETECTED, true);
+            remote_document
+        }),
+        ..Default::default()
+    };
+    let config2: utils::ReplicationTestConfiguration = Default::default();
+
+    utils::with_three_dbs(config1, config2, |local_db1, local_db2, central_db, repl1, _repl2| {
+        let i = 1234;
+        let i1 = 1;
+        let i2 = 2;
+
+        // Save doc 'foo'
+        utils::add_doc(local_db1, "foo", i, "Hello World!");
+
+        // Check 'foo' is replicated to central and DB 2
+        assert!(utils::check_callback_with_wait(|| central_db.get_document("foo").is_ok(), None));
+        assert!(utils::check_callback_with_wait(|| local_db2.get_document("foo").is_ok(), None));
+
+        // Stop replication on DB 1
+        repl1.stop();
+
+        // Modify 'foo' in DB 1
+        let mut foo = local_db1.get_document("foo").unwrap();
+        foo.mutable_properties().at("i").put_i64(i1);
+        local_db1.save_document_with_concurency_control(&mut foo, ConcurrencyControl::FailOnConflict).expect("save");
+
+        // Modify 'foo' in DB 2
+        let mut foo = local_db2.get_document("foo").unwrap();
+        foo.mutable_properties().at("i").put_i64(i2);
+        local_db2.save_document_with_concurency_control(&mut foo, ConcurrencyControl::FailOnConflict).expect("save");
+
+        // Check DB 2 version is in central
+        assert!(utils::check_callback_with_wait(|| central_db.get_document("foo").unwrap().properties().get("i").as_i64_or_0() == i2, None));
+
+        // Restart DB 1 replication
+        repl1.start(false);
+
+        // Check conflict was detected
+        assert!(utils::check_static_with_wait(&CONFLICT_DETECTED, true, None));
+
+        // Check DB 2 version is in DB 1
+        assert!(utils::check_callback_with_wait(|| local_db1.get_document("foo").unwrap().properties().get("i").as_i64_or_0() == i2, None));
+    });
+}
+
+fn encryptor(
+    _document_id: Option<String>,
+    _properties: Dict,
+    _key_path: Option<String>,
+    input: Option<Vec<u8>>,
+    _algorithm: Option<String>,
+    _kid: Option<String>,
+    _error: &Error
+) -> Vec<u8> {
+    input.map(|v| v.iter().map(|u| u ^ 48).collect()).unwrap_or(vec!())
+}
+fn decryptor(
+    _document_id: Option<String>,
+    _properties: Dict,
+    _key_path: Option<String>,
+    input: Option<Vec<u8>>,
+    _algorithm: Option<String>,
+    _kid: Option<String>,
+    _error: &Error
+) -> Vec<u8> {
+    input.map(|v| v.iter().map(|u| u ^ 48).collect()).unwrap_or(vec!())
+}
+
+#[test]
+fn encryption_decryption() {
+    let config1 = utils::ReplicationTestConfiguration {
+        property_encryptor: Some(encryptor),
+        property_decryptor: Some(decryptor),
+        ..Default::default()
+    };
+    let config2 = utils::ReplicationTestConfiguration {
+        property_encryptor: Some(encryptor),
+        property_decryptor: Some(decryptor),
+        ..Default::default()
+    };
+
+    utils::with_three_dbs(config1, config2, |local_db1, local_db2, central_db, _repl1, _repl2| {
+        // Save doc 'foo' with an encryptable property
+        {
+            let mut doc_db1 = Document::new_with_id("foo");
+            let mut props = doc_db1.mutable_properties();
+            props.at("i").put_i64(1234);
+            props.at("s").put_encrypt(&Encryptable::create_with_string("test_encryption".to_string()));
+            local_db1.save_document_with_concurency_control(&mut doc_db1, ConcurrencyControl::FailOnConflict).expect("save");
         }
 
-        assert_eq!(doc_found, true);
+        // Check foo is replicated with data encrypted in central
+        assert!(utils::check_callback_with_wait(|| central_db.get_document("foo").is_ok(), None));
+        {
+            let doc_central = central_db.get_document("foo").unwrap();
+            let dict = doc_central.properties();
+            assert!(dict.to_keys_hash_set().get("encrypted$s").is_some());
+        }
 
-        // Stop replication
-        repl.stop();
+        // Check foo is replicated with data decrypted in DB 2
+        assert!(utils::check_callback_with_wait(|| local_db2.get_document("foo").is_ok(), None));
+        {
+            let doc_db2 = local_db2.get_document("foo").unwrap();
+            let dict = doc_db2.properties();
+            let value = dict.get("s");
+            assert!(value.is_encryptable());
+            let encryptable = value.get_encryptable_value();
+            assert!(encryptable.get_value().as_string() == Some("test_encryption"));
+            drop(encryptable);
+        }
     });
 }
