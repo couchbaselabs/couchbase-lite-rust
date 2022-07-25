@@ -10,3 +10,5 @@ ADD build.rs build.rs
 ADD libcblite-3.0.1 libcblite-3.0.1
 ADD src src
 RUN cargo c
+
+RUN cargo b
