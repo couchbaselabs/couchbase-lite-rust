@@ -279,7 +279,7 @@ impl<'f> Array<'f> {
         unsafe {
             let mut i = MaybeUninit::<FLArrayIterator>::uninit();
             FLArrayIterator_Begin(self._ref, i.as_mut_ptr());
-            return ArrayIterator{_innards: i.assume_init(), _owner: self._owner};
+            return ArrayIterator{_innards: i.assume_init(), _owner: self._owner, _len: self.count() as usize};
         }
     }
 }
@@ -335,7 +335,8 @@ impl<'a> IntoIterator for Array<'a> {
 
 pub struct ArrayIterator<'a> {
     _innards : FLArrayIterator,
-    _owner : PhantomData<&'a Fleece>
+    _owner : PhantomData<&'a Fleece>,
+    _len: usize,
 }
 
 impl<'a> ArrayIterator<'a> {
@@ -364,8 +365,28 @@ impl<'f> Iterator for ArrayIterator<'f> {
         }
     }
 }
-//TODO: Implement FusedIterator, ExactSizeIterator, FromIterator
 
+impl<'f> std::iter::FusedIterator for ArrayIterator<'f> {}
+
+impl<'f> ExactSizeIterator for ArrayIterator<'f> {
+    fn len(&self) -> usize {
+        self._len
+    }
+}
+
+impl<'f> std::iter::FromIterator<Value<'f>> for MutableArray {
+    fn from_iter<I: IntoIterator<Item=Value<'f>>>(iter: I) -> Self {
+        let mut c = MutableArray::new();
+        let mut i = 0;
+
+        for v in iter {
+            c.at(i).put_value(&v);
+            i = i + 1;
+        }
+
+        c
+    }
+}
 
 //////// DICT
 
@@ -406,7 +427,7 @@ impl<'f> Dict<'f> {
         unsafe {
             let mut i = MaybeUninit::<FLDictIterator>::uninit();
             FLDictIterator_Begin(self._ref, i.as_mut_ptr());
-            return DictIterator{_innards: i.assume_init(), _owner: self._owner};
+            return DictIterator{_innards: i.assume_init(), _owner: self._owner, _len: self.count() as usize };
         }
     }
 
@@ -482,7 +503,8 @@ impl DictKey {
 
 pub struct DictIterator<'a> {
     _innards : FLDictIterator,
-    _owner : PhantomData<&'a Fleece>
+    _owner : PhantomData<&'a Fleece>,
+    _len: usize,
 }
 
 impl<'a> DictIterator<'a> {
@@ -506,4 +528,21 @@ impl<'a> Iterator for DictIterator<'a> {
         }
     }
 }
-//TODO: Implement FusedIterator, ExactSizeIterator, FromIterator
+
+impl<'a> std::iter::FusedIterator for DictIterator<'a> {}
+
+impl<'a> ExactSizeIterator for DictIterator<'a> {
+    fn len(&self) -> usize {
+        self._len
+    }
+}
+
+impl<'a> std::iter::FromIterator<(&'a str, Value<'a>)> for MutableDict {
+    fn from_iter<T: IntoIterator<Item=(&'a str, Value<'a>)>>(iter: T) -> Self {
+        let mut mut_dict = MutableDict::new();
+        for (key, value) in iter {
+            mut_dict.at(key).put_value(&value);
+        }
+        mut_dict
+    }
+}
