@@ -47,7 +47,7 @@ pub struct Fleece {
 impl Fleece {
     pub fn parse(data: &[u8], trust: Trust) -> Result<Self> {
         unsafe {
-            let mut copied = FLSlice_Copy(bytes_as_slice(data));
+            let mut copied = FLSlice_Copy(bytes_as_slice(data)._ref);
             let doc = FLDoc_FromResultData(copied, trust as u32, ptr::null_mut(), NULL_SLICE);
             if doc.is_null() {
                 copied.release();
@@ -60,7 +60,7 @@ impl Fleece {
     pub fn parse_json(json: &str) -> Result<Self> {
         unsafe {
             let mut error: FLError = 0;
-            let doc = FLDoc_FromJSON(as_slice(json), &mut error);
+            let doc = FLDoc_FromJSON(as_slice(json)._ref, &mut error);
             if doc.is_null() {
                 return Err(Error::fleece_error(error));
             }
@@ -158,7 +158,7 @@ pub struct Value<'f> {
 impl<'f> Value<'f> {
     pub const UNDEFINED : Value<'static> = Value{_ref: ptr::null(), _owner: PhantomData};
 
-    pub(crate) fn wrap<'a, T>(value: FLValue, _owner: &'a T) -> Value<'a> {
+    pub(crate) fn wrap<T>(value: FLValue, _owner: &T) -> Value {
         Value{_ref: value, _owner: PhantomData}
     }
 
@@ -264,7 +264,7 @@ pub struct Array<'f> {
 }
 
 impl<'f> Array<'f> {
-    pub(crate) fn wrap<'a, T>(array: FLArray, _owner: &'a T) -> Array<'a> {
+    pub(crate) fn wrap<T>(array: FLArray, _owner: &T) -> Array {
         Array{_ref: array, _owner: PhantomData}
     }
 
@@ -406,7 +406,7 @@ impl<'f> Dict<'f> {
     pub fn is_encryptable(&self) -> bool { unsafe { FLDict_IsEncryptableValue(self._ref) } }
 
     pub fn get(&self, key: &str) -> Value<'f> {
-        unsafe { Value{_ref: FLDict_Get(self._ref, as_slice(key)), _owner: self._owner} }
+        unsafe { Value{_ref: FLDict_Get(self._ref, as_slice(key)._ref), _owner: self._owner} }
     }
 
     pub fn get_key(&self, key: &mut DictKey) -> Value<'f> {
@@ -485,7 +485,7 @@ pub struct DictKey {
 impl DictKey {
     pub fn new(key: &str) -> DictKey {
         unsafe {
-            return DictKey{_innards: FLDictKey_Init(as_slice(key))};
+            return DictKey{_innards: FLDictKey_Init(as_slice(key)._ref)};
         }
     }
 
