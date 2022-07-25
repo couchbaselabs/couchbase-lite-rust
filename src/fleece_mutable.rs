@@ -66,16 +66,28 @@ impl MutableArray {
         unsafe { FLMutableArray_IsChanged(self._ref) }
     }
 
-    pub fn at<'s>(&'s mut self, index: u32) -> Slot<'s> {
-        unsafe { Slot{_ref: FLMutableArray_Set(self._ref, index), _owner: PhantomData} }
+    pub fn at(&mut self, index: u32) -> Option<Slot> {
+        if self.count() > index {
+            Some(unsafe { Slot{_ref: FLMutableArray_Set(self._ref, index), _owner: PhantomData} })
+        } else {
+            None
+        }
     }
 
-    pub fn append<'s>(&'s mut self) -> Slot<'s> {
+    pub fn append(&mut self) -> Slot {
         unsafe { Slot{_ref: FLMutableArray_Append(self._ref), _owner: PhantomData} }
     }
 
-    pub fn insert<'s>(&'s mut self, index: u32) {
-        unsafe { FLMutableArray_Insert(self._ref, index, 1) }
+    pub fn insert(&mut self, index: u32) -> Result<()> {
+        if self.count() > index {
+            unsafe { FLMutableArray_Insert(self._ref, index, 1) }
+            Ok(())
+        } else {
+            Err(Error {
+                code: ErrorCode::CouchbaseLite(CouchbaseLiteError::MemoryError),
+                internal_info: None
+            })
+        }
     }
 
     pub fn remove(&mut self, index: u32) {

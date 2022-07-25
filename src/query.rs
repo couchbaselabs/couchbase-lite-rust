@@ -51,6 +51,7 @@ impl Query {
                 // TODO: Return the error pos somehow
                 return failure(err);
             }
+
             return Ok(Query{_ref: q});
         }
     }

@@ -377,11 +377,8 @@ impl<'f> ExactSizeIterator for ArrayIterator<'f> {
 impl<'f> std::iter::FromIterator<Value<'f>> for MutableArray {
     fn from_iter<I: IntoIterator<Item=Value<'f>>>(iter: I) -> Self {
         let mut c = MutableArray::new();
-        let mut i = 0;
-
         for v in iter {
-            c.at(i).put_value(&v);
-            i = i + 1;
+            c.append().put_value(&v);
         }
 
         c
