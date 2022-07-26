@@ -35,7 +35,10 @@ pub mod replicator;
 mod c_api;
 pub mod slice;
 
-use self::c_api::*;
+use self::c_api::{
+    CBLListenerToken, CBLListener_Remove, CBLRefCounted, CBL_DumpInstances, CBL_InstanceCount,
+    CBL_Release, CBL_Retain,
+};
 
 //////// RE-EXPORT:
 
@@ -50,18 +53,36 @@ pub use replicator::*;
 
 //////// TOP-LEVEL TYPES:
 
+pub trait CblRef {
+    type Output;
+    const fn get_ref(&self) -> Self::Output;
+}
+
 /// A time value for document expiration. Defined as milliseconds since the Unix epoch (1/1/1970.)
 pub struct Timestamp(pub i64);
 
 /// An opaque token representing a registered listener.
 /// When this object is dropped, the listener function will not be called again.
 pub struct ListenerToken {
-    _ref: *mut CBLListenerToken,
+    cbl_ref: *mut CBLListenerToken,
+}
+
+impl ListenerToken {
+    pub fn new(cbl_ref: *mut CBLListenerToken) -> Self {
+        Self { cbl_ref }
+    }
+}
+
+impl CblRef for ListenerToken {
+    type Output = *mut CBLListenerToken;
+    const fn get_ref(&self) -> Self::Output {
+        self.cbl_ref
+    }
 }
 
 impl Drop for ListenerToken {
     fn drop(&mut self) {
-        unsafe { CBLListener_Remove(self._ref) }
+        unsafe { CBLListener_Remove(self.get_ref()) }
     }
 }
 
@@ -81,9 +102,9 @@ pub fn dump_instances() {
 //////// REFCOUNT SUPPORT (INTERNAL)
 
 pub(crate) unsafe fn retain<T>(cbl_ref: *mut T) -> *mut T {
-    CBL_Retain(cbl_ref as *mut CBLRefCounted) as *mut T
+    CBL_Retain(cbl_ref.cast::<CBLRefCounted>()).cast::<T>()
 }
 
 pub(crate) unsafe fn release<T>(cbl_ref: *mut T) {
-    CBL_Release(cbl_ref as *mut CBLRefCounted)
+    CBL_Release(cbl_ref.cast::<CBLRefCounted>());
 }

@@ -42,7 +42,7 @@ impl Endpoint {
         unsafe {
             let mut error = CBLError::default();
             let endpoint: *mut CBLEndpoint =
-                CBLEndpoint_CreateWithURL(as_slice(&url)._ref, &mut error as *mut CBLError);
+                CBLEndpoint_CreateWithURL(as_slice(&url).get_ref(), &mut error as *mut CBLError);
 
             check_error(&error).and_then(|()| {
                 Ok(Self {
@@ -79,8 +79,8 @@ impl Authenticator {
         unsafe {
             Self {
                 _ref: retain(CBLAuth_CreatePassword(
-                    as_slice(&username)._ref,
-                    as_slice(&password)._ref,
+                    as_slice(&username).get_ref(),
+                    as_slice(&password).get_ref(),
                 )),
             }
         }
@@ -90,8 +90,8 @@ impl Authenticator {
         unsafe {
             Self {
                 _ref: retain(CBLAuth_CreateSession(
-                    as_slice(&session_id)._ref,
-                    as_slice(&cookie_name)._ref,
+                    as_slice(&session_id).get_ref(),
+                    as_slice(&cookie_name).get_ref(),
                 )),
             }
         }
@@ -186,16 +186,16 @@ impl From<ProxySettings> for CBLProxySettings {
             type_: proxy_settings.proxy_type.into(),
             hostname: proxy_settings
                 .hostname
-                .map(|s| unsafe { FLSlice_Copy(as_slice(&s)._ref).as_slice() })
+                .map(|s| unsafe { FLSlice_Copy(as_slice(&s).get_ref()).as_slice() })
                 .unwrap_or(slice::NULL_SLICE),
             port: proxy_settings.port,
             username: proxy_settings
                 .username
-                .map(|s| unsafe { FLSlice_Copy(as_slice(&s)._ref).as_slice() })
+                .map(|s| unsafe { FLSlice_Copy(as_slice(&s).get_ref()).as_slice() })
                 .unwrap_or(slice::NULL_SLICE),
             password: proxy_settings
                 .password
-                .map(|s| unsafe { FLSlice_Copy(as_slice(&s)._ref).as_slice() })
+                .map(|s| unsafe { FLSlice_Copy(as_slice(&s).get_ref()).as_slice() })
                 .unwrap_or(slice::NULL_SLICE),
         }
     }
@@ -325,7 +325,7 @@ pub extern "C" fn c_property_encryptor(
                     &error,
                 )
             })
-            .map(|v| FLSlice_Copy(bytes_as_slice(&v[..])._ref))
+            .map(|v| FLSlice_Copy(bytes_as_slice(&v[..]).get_ref()))
             .unwrap_or(FLSliceResult_New(0));
 
         if !cbl_error.is_null() {
@@ -381,7 +381,7 @@ pub extern "C" fn c_property_decryptor(
                     &error,
                 )
             })
-            .map(|v| FLSlice_Copy(bytes_as_slice(&v[..])._ref))
+            .map(|v| FLSlice_Copy(bytes_as_slice(&v[..]).get_ref()))
             .unwrap_or(FLSliceResult_New(0));
 
         if !cbl_error.is_null() {
@@ -512,17 +512,19 @@ impl<'c> From<ReplicatorConfiguration<'c>> for CBLReplicatorConfiguration {
                     .map(|a| a._ref)
                     .unwrap_or(ptr::null_mut()),
                 proxy,
-                headers: MutableDict::from_hashmap(&config.headers).as_dict()._ref,
+                headers: MutableDict::from_hashmap(&config.headers)
+                    .as_dict()
+                    .get_ref(),
                 pinnedServerCertificate: config
                     .pinned_server_certificate
-                    .map(|c| slice::bytes_as_slice(c)._ref)
+                    .map(|c| slice::bytes_as_slice(c).get_ref())
                     .unwrap_or(slice::NULL_SLICE),
                 trustedRootCertificates: config
                     .trusted_root_certificates
-                    .map(|c| slice::bytes_as_slice(c)._ref)
+                    .map(|c| slice::bytes_as_slice(c).get_ref())
                     .unwrap_or(slice::NULL_SLICE),
-                channels: config.channels._ref,
-                documentIDs: config.document_ids._ref,
+                channels: config.channels.get_ref(),
+                documentIDs: config.document_ids.get_ref(),
                 pushFilter: (*context).push_filter.and(Some(c_replication_push_filter)),
                 pullFilter: (*context).pull_filter.and(Some(c_replication_pull_filter)),
                 conflictResolver: (*context)
@@ -790,7 +792,7 @@ impl Replicator {
             let mut error = CBLError::default();
             let result = CBLReplicator_IsDocumentPending(
                 self._ref,
-                as_slice(doc_id)._ref,
+                as_slice(doc_id).get_ref(),
                 &mut error as *mut CBLError,
             );
 
@@ -801,30 +803,24 @@ impl Replicator {
     /** Adds a listener that will be called when the replicator's status changes. */
     pub fn add_change_listener(&mut self, listener: ReplicatorChangeListener) -> ListenerToken {
         unsafe {
-            let callback: *mut ::std::os::raw::c_void = std::mem::transmute(listener);
-
-            ListenerToken {
-                _ref: CBLReplicator_AddChangeListener(
-                    self._ref,
-                    Some(c_replicator_change_listener),
-                    callback,
-                ),
-            }
+            let callback = listener as *mut std::ffi::c_void;
+            ListenerToken::new(CBLReplicator_AddChangeListener(
+                self._ref,
+                Some(c_replicator_change_listener),
+                callback,
+            ))
         }
     }
 
     /** Adds a listener that will be called when documents are replicated. */
     pub fn add_document_listener(&mut self, listener: ReplicatedDocumentListener) -> ListenerToken {
         unsafe {
-            let callback: *mut ::std::os::raw::c_void = std::mem::transmute(listener);
-
-            ListenerToken {
-                _ref: CBLReplicator_AddDocumentReplicationListener(
-                    self._ref,
-                    Some(c_replicator_document_change_listener),
-                    callback,
-                ),
-            }
+            let callback = listener as *mut std::ffi::c_void;
+            ListenerToken::new(CBLReplicator_AddDocumentReplicationListener(
+                self._ref,
+                Some(c_replicator_document_change_listener),
+                callback,
+            ))
         }
     }
 }

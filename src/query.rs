@@ -46,7 +46,7 @@ impl Query {
             let q = CBLDatabase_CreateQuery(
                 db.get_ref(),
                 language as CBLQueryLanguage,
-                as_slice(str)._ref,
+                as_slice(str).get_ref(),
                 &mut pos,
                 &mut err,
             );
@@ -76,8 +76,8 @@ impl Query {
     pub fn parameters(&self) -> Dict {
         unsafe {
             Dict {
-                _ref: CBLQuery_Parameters(self._ref),
-                _owner: PhantomData,
+                cbl_ref: CBLQuery_Parameters(self._ref),
+                owner: PhantomData,
             }
         }
     }
@@ -185,8 +185,8 @@ impl<'r> Row<'r> {
     pub fn get(&self, index: isize) -> Value<'r> {
         unsafe {
             Value {
-                _ref: CBLResultSet_ValueAtIndex(self.results._ref, index as c_uint),
-                _owner: PhantomData,
+                cbl_ref: CBLResultSet_ValueAtIndex(self.results._ref, index as c_uint),
+                owner: PhantomData,
             }
         }
     }
@@ -195,8 +195,8 @@ impl<'r> Row<'r> {
     pub fn get_key(&self, key: &str) -> Value<'r> {
         unsafe {
             Value {
-                _ref: CBLResultSet_ValueForKey(self.results._ref, as_slice(key)._ref),
-                _owner: PhantomData,
+                cbl_ref: CBLResultSet_ValueForKey(self.results._ref, as_slice(key).get_ref()),
+                owner: PhantomData,
             }
         }
     }
@@ -221,8 +221,8 @@ impl<'r> Row<'r> {
     pub fn as_array(&self) -> Array {
         unsafe {
             Array {
-                _ref: CBLResultSet_ResultArray(self.results._ref),
-                _owner: PhantomData,
+                cbl_ref: CBLResultSet_ResultArray(self.results._ref),
+                owner: PhantomData,
             }
         }
     }
@@ -231,8 +231,8 @@ impl<'r> Row<'r> {
     pub fn as_dict(&self) -> Dict {
         unsafe {
             Dict {
-                _ref: CBLResultSet_ResultDict(self.results._ref),
-                _owner: PhantomData,
+                cbl_ref: CBLResultSet_ResultDict(self.results._ref),
+                owner: PhantomData,
             }
         }
     }

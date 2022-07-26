@@ -15,6 +15,8 @@
 // limitations under the License.
 //
 
+use crate::CblRef;
+
 use super::c_api::*;
 
 use std::borrow::Cow;
@@ -32,46 +34,53 @@ pub const NULL_SLICE: FLSlice = FLSlice {
 
 #[derive(Clone, Copy)]
 pub struct Slice<T> {
-    pub(crate) _ref: FLSlice,
+    pub(crate) cbl_ref: FLSlice,
     _owner: T,
 }
 
+impl<T> CblRef for Slice<T> {
+    type Output = FLSlice;
+    const fn get_ref(&self) -> Self::Output {
+        self.cbl_ref
+    }
+}
+
 impl<T> Slice<T> {
-    pub const fn wrap(slice: FLSlice, _owner: T) -> Self {
+    pub const fn wrap(slice: FLSlice, owner: T) -> Self {
         Self {
-            _ref: slice,
-            _owner,
+            cbl_ref: slice,
+            _owner: owner,
         }
     }
 
     pub fn as_byte_array(&self) -> Option<&[u8]> {
-        unsafe { self._ref.as_byte_array() }
+        unsafe { self.get_ref().as_byte_array() }
     }
 
     pub fn as_str(&self) -> Option<&str> {
-        unsafe { self._ref.as_str() }
+        unsafe { self.get_ref().as_str() }
     }
 
     pub fn to_string(&self) -> Option<String> {
-        unsafe { self._ref.to_string() }
+        unsafe { self.get_ref().to_string() }
     }
 
     pub fn to_vec(&self) -> Option<Vec<u8>> {
-        unsafe { self._ref.to_vec() }
+        unsafe { self.get_ref().to_vec() }
     }
 
     pub fn map<F, FT>(&self, f: F) -> Option<FT>
     where
         F: Fn(&FLSlice) -> FT,
     {
-        self._ref.map(f)
+        self.get_ref().map(f)
     }
 }
 
 pub fn as_slice(s: &str) -> Slice<&str> {
     Slice::wrap(
         FLSlice {
-            buf: s.as_ptr() as *const c_void,
+            buf: s.as_ptr().cast::<c_void>(),
             size: s.len() as u64,
         },
         s,
@@ -81,7 +90,7 @@ pub fn as_slice(s: &str) -> Slice<&str> {
 pub fn bytes_as_slice(s: &[u8]) -> Slice<&[u8]> {
     Slice::wrap(
         FLSlice {
-            buf: s.as_ptr() as *const c_void,
+            buf: s.as_ptr().cast::<c_void>(),
             size: s.len() as u64,
         },
         s,
@@ -95,7 +104,7 @@ impl FLSlice {
             return None;
         }
         return Some(std::slice::from_raw_parts(
-            self.buf as *const u8,
+            self.buf.cast::<u8>(),
             self.size as usize,
         ));
     }
@@ -106,23 +115,23 @@ impl FLSlice {
             Some(b) => str::from_utf8(b).ok(),
         }
     }
-    pub unsafe fn to_string(&self) -> Option<String> {
-        return self.as_str().map(|s| s.to_string());
+
+    pub unsafe fn to_string(self) -> Option<String> {
+        self.as_str().map(std::string::ToString::to_string)
     }
 
-    pub unsafe fn to_vec(&self) -> Option<Vec<u8>> {
-        return self.as_byte_array().map(|a| a.to_owned());
+    pub unsafe fn to_vec(self) -> Option<Vec<u8>> {
+        self.as_byte_array().map(std::borrow::ToOwned::to_owned)
     }
 
     pub fn map<F, T>(&self, f: F) -> Option<T>
     where
-        F: Fn(&FLSlice) -> T,
+        F: Fn(&Self) -> T,
     {
         if !self {
-            None
-        } else {
-            Some(f(self))
+            return Some(f(self));
         }
+        None
     }
 }
 
@@ -141,7 +150,7 @@ impl std::ops::Not for FLSlice {
 }
 
 impl FLSliceResult {
-    pub fn as_slice(&self) -> FLSlice {
+    pub const fn as_slice(&self) -> FLSlice {
         FLSlice {
             buf: self.buf,
             size: self.size,

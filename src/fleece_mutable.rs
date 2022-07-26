@@ -56,7 +56,7 @@ impl MutableArray {
     pub fn from_array_(array: &Array, flags: CopyFlags) -> MutableArray {
         unsafe {
             MutableArray {
-                _ref: FLArray_MutableCopy(array._ref, flags as u32),
+                _ref: FLArray_MutableCopy(array.get_ref(), flags as u32),
             }
         }
     }
@@ -205,7 +205,7 @@ impl<'a> IntoIterator for &'a MutableArray {
 impl<'d> Array<'d> {
     pub fn as_mutable(self) -> Option<MutableArray> {
         unsafe {
-            let md = FLArray_AsMutable(self._ref);
+            let md = FLArray_AsMutable(self.get_ref());
             if md.is_null() {
                 None
             } else {
@@ -241,7 +241,7 @@ impl MutableDict {
     pub fn from_dict_(dict: &Dict, flags: CopyFlags) -> MutableDict {
         unsafe {
             MutableDict {
-                _ref: FLDict_MutableCopy(dict._ref, flags as u32),
+                _ref: FLDict_MutableCopy(dict.get_ref(), flags as u32),
             }
         }
     }
@@ -258,14 +258,14 @@ impl MutableDict {
     pub fn at<'s>(&'s mut self, key: &str) -> Slot<'s> {
         unsafe {
             Slot {
-                _ref: FLMutableDict_Set(self._ref, as_slice(key)._ref),
+                _ref: FLMutableDict_Set(self._ref, as_slice(key).get_ref()),
                 _owner: PhantomData,
             }
         }
     }
 
     pub fn remove(&mut self, key: &str) {
-        unsafe { FLMutableDict_Remove(self._ref, as_slice(key)._ref) }
+        unsafe { FLMutableDict_Remove(self._ref, as_slice(key).get_ref()) }
     }
 
     pub fn remove_all(&mut self) {
@@ -286,7 +286,7 @@ impl MutableDict {
     pub fn set_encryptable_value(dict: MutableDict, key: String, encryptable: Encryptable) {
         unsafe {
             FLSlot_SetEncryptableValue(
-                FLMutableDict_Set(dict._ref, as_slice(&key)._ref),
+                FLMutableDict_Set(dict._ref, as_slice(&key).get_ref()),
                 encryptable.get_ref(),
             );
         }
@@ -395,7 +395,7 @@ impl<'a> IntoIterator for &'a MutableDict {
 impl<'d> Dict<'d> {
     pub fn as_mutable(self) -> Option<MutableDict> {
         unsafe {
-            let md = FLDict_AsMutable(self._ref);
+            let md = FLDict_AsMutable(self.get_ref());
             if md.is_null() {
                 None
             } else {
@@ -436,11 +436,11 @@ impl<'s> Slot<'s> {
     }
 
     pub fn put_string<STR: AsRef<str>>(self, value: STR) {
-        unsafe { FLSlot_SetString(self._ref, as_slice(value.as_ref())._ref) }
+        unsafe { FLSlot_SetString(self._ref, as_slice(value.as_ref()).get_ref()) }
     }
 
     pub fn put_data<DATA: AsRef<[u8]>>(self, value: DATA) {
-        unsafe { FLSlot_SetString(self._ref, bytes_as_slice(value.as_ref())._ref) }
+        unsafe { FLSlot_SetString(self._ref, bytes_as_slice(value.as_ref()).get_ref()) }
     }
 
     pub fn put_value<VALUE: FleeceReference>(self, value: &VALUE) {

@@ -76,22 +76,26 @@ unsafe extern "C" fn c_database_buffer_notifications(
 /** A connection to an open database. */
 #[derive(Debug, PartialEq, Eq)]
 pub struct Database {
-    _ref: *mut CBLDatabase,
+    cbl_ref: *mut CBLDatabase,
+}
+
+impl CblRef for Database {
+    type Output = *mut CBLDatabase;
+    const fn get_ref(&self) -> Self::Output {
+        self.cbl_ref
+    }
 }
 
 impl Database {
     //////// CONSTRUCTORS:
 
-    pub(crate) fn retain(_ref: *mut CBLDatabase) -> Database {
+    pub(crate) fn retain(cbl_ref: *mut CBLDatabase) -> Database {
         Database {
-            _ref: unsafe { retain(_ref) },
+            cbl_ref: unsafe { retain(cbl_ref) },
         }
     }
-    pub(crate) fn wrap(_ref: *mut CBLDatabase) -> Database {
-        Database { _ref }
-    }
-    pub(crate) fn get_ref(&self) -> *mut CBLDatabase {
-        self._ref
+    pub(crate) fn wrap(cbl_ref: *mut CBLDatabase) -> Database {
+        Database { cbl_ref }
     }
 
     /** Opens a database, or creates it if it doesn't exist yet, returning a new `Database`
@@ -103,7 +107,7 @@ impl Database {
         unsafe {
             if let Some(cfg) = config {
                 let mut c_config: CBLDatabaseConfiguration = CBLDatabaseConfiguration_Default();
-                c_config.directory = as_slice(cfg.directory.to_str().unwrap())._ref;
+                c_config.directory = as_slice(cfg.directory.to_str().unwrap()).get_ref();
                 if let Some(encryption_key) = cfg.encryption_key.as_ref() {
                     c_config.encryptionKey = *encryption_key;
                 }
@@ -115,7 +119,7 @@ impl Database {
 
     unsafe fn _open(name: &str, config_ptr: *const CBLDatabaseConfiguration) -> Result<Database> {
         let mut err = CBLError::default();
-        let db_ref = CBLDatabase_Open(as_slice(name)._ref, config_ptr, &mut err);
+        let db_ref = CBLDatabase_Open(as_slice(name).get_ref(), config_ptr, &mut err);
         if db_ref.is_null() {
             return failure(err);
         }
@@ -128,8 +132,8 @@ impl Database {
     pub fn exists<P: AsRef<Path>>(name: &str, in_directory: P) -> bool {
         unsafe {
             CBL_DatabaseExists(
-                as_slice(name)._ref,
-                as_slice(in_directory.as_ref().to_str().unwrap())._ref,
+                as_slice(name).get_ref(),
+                as_slice(in_directory.as_ref().to_str().unwrap()).get_ref(),
             )
         }
     }
@@ -139,8 +143,8 @@ impl Database {
         unsafe {
             let mut error = CBLError::default();
             if CBL_DeleteDatabase(
-                as_slice(name)._ref,
-                as_slice(in_directory.as_ref().to_str().unwrap())._ref,
+                as_slice(name).get_ref(),
+                as_slice(in_directory.as_ref().to_str().unwrap()).get_ref(),
                 &mut error,
             ) {
                 Ok(true)
@@ -157,13 +161,15 @@ impl Database {
     /** Closes and deletes a database. If there are any other connections to the database,
     an error is returned. */
     pub fn delete(self) -> Result<()> {
-        unsafe { check_bool(|error| CBLDatabase_Delete(self._ref, error)) }
+        unsafe { check_bool(|error| CBLDatabase_Delete(self.get_ref(), error)) }
     }
 
     /** Compacts a database file, freeing up unused disk space. */
     pub fn perform_maintenance(&mut self, of_type: MaintenanceType) -> Result<()> {
         unsafe {
-            check_bool(|error| CBLDatabase_PerformMaintenance(self._ref, of_type as u32, error))
+            check_bool(|error| {
+                CBLDatabase_PerformMaintenance(self.get_ref(), of_type as u32, error)
+            })
         }
     }
 
@@ -175,13 +181,13 @@ impl Database {
     pub fn in_transaction<T>(&mut self, callback: fn(&mut Database) -> Result<T>) -> Result<T> {
         let mut err = CBLError::default();
         unsafe {
-            if !CBLDatabase_BeginTransaction(self._ref, &mut err) {
+            if !CBLDatabase_BeginTransaction(self.get_ref(), &mut err) {
                 return failure(err);
             }
         }
         let result = callback(self);
         unsafe {
-            if !CBLDatabase_EndTransaction(self._ref, result.is_ok(), &mut err) {
+            if !CBLDatabase_EndTransaction(self.get_ref(), result.is_ok(), &mut err) {
                 return failure(err);
             }
         }
@@ -192,17 +198,17 @@ impl Database {
 
     /** Returns the database's name. */
     pub fn name(&self) -> &str {
-        unsafe { CBLDatabase_Name(self._ref).as_str().unwrap() }
+        unsafe { CBLDatabase_Name(self.get_ref()).as_str().unwrap() }
     }
 
     /** Returns the database's full filesystem path. */
     pub fn path(&self) -> PathBuf {
-        unsafe { PathBuf::from(CBLDatabase_Path(self._ref).to_string().unwrap()) }
+        unsafe { PathBuf::from(CBLDatabase_Path(self.get_ref()).to_string().unwrap()) }
     }
 
     /** Returns the number of documents in the database. */
     pub fn count(&self) -> u64 {
-        unsafe { CBLDatabase_Count(self._ref) }
+        unsafe { CBLDatabase_Count(self.get_ref()) }
     }
 
     //////// NOTIFICATIONS:
@@ -214,13 +220,11 @@ impl Database {
         unsafe {
             let callback = listener as *mut std::ffi::c_void;
 
-            ListenerToken {
-                _ref: CBLDatabase_AddChangeListener(
-                    self._ref,
-                    Some(c_database_change_listener),
-                    callback,
-                ),
-            }
+            ListenerToken::new(CBLDatabase_AddChangeListener(
+                self.get_ref(),
+                Some(c_database_change_listener),
+                callback,
+            ))
         }
     }
 
@@ -233,7 +237,7 @@ impl Database {
             let callback = callback as *mut std::ffi::c_void;
 
             CBLDatabase_BufferNotifications(
-                self._ref,
+                self.get_ref(),
                 Some(c_database_buffer_notifications),
                 callback,
             );
@@ -244,19 +248,19 @@ impl Database {
     callbacks. (Only useful after `buffer_notifications` has been called.) */
     pub fn send_notifications(&self) {
         unsafe {
-            CBLDatabase_SendNotifications(self._ref);
+            CBLDatabase_SendNotifications(self.get_ref());
         }
     }
 }
 
 impl Drop for Database {
     fn drop(&mut self) {
-        unsafe { release(self._ref) }
+        unsafe { release(self.get_ref()) }
     }
 }
 
 impl Clone for Database {
     fn clone(&self) -> Self {
-        Database::retain(self._ref)
+        Database::retain(self.get_ref())
     }
 }
