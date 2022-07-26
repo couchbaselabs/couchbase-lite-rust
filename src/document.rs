@@ -84,7 +84,7 @@ impl Database {
                     return Err(Error::cbl_error(CouchbaseLiteError::NotFound));
                 }
             }
-            return Ok(Document::wrap(doc));
+            Ok(Document::wrap(doc))
         }
     }
 
@@ -94,9 +94,7 @@ impl Database {
     `save_document_with_concurency_control` or
     `save_document_resolving` instead. */
     pub fn save_document(&mut self, doc: &mut Document) -> Result<()> {
-        unsafe {
-            return check_bool(|error| CBLDatabase_SaveDocument(self.get_ref(), doc._ref, error));
-        }
+        unsafe { check_bool(|error| CBLDatabase_SaveDocument(self.get_ref(), doc._ref, error)) }
     }
 
     /** Saves a new or modified document to the database.
@@ -111,14 +109,14 @@ impl Database {
     ) -> Result<()> {
         let c_concurrency = concurrency as u8;
         unsafe {
-            return check_bool(|error| {
+            check_bool(|error| {
                 CBLDatabase_SaveDocumentWithConcurrencyControl(
                     self.get_ref(),
                     doc._ref,
                     c_concurrency,
                     error,
                 )
-            });
+            })
         }
     }
 
@@ -131,7 +129,7 @@ impl Database {
         conflict_handler: ConflictHandler,
     ) -> Result<Document> {
         unsafe {
-            let callback: *mut ::std::os::raw::c_void = std::mem::transmute(conflict_handler);
+            let callback = conflict_handler as *mut std::ffi::c_void;
             match check_bool(|error| {
                 CBLDatabase_SaveDocumentWithConflictHandler(
                     self.get_ref(),
@@ -149,9 +147,7 @@ impl Database {
 
     /** Deletes a document from the database. Deletions are replicated. */
     pub fn delete_document(&mut self, doc: &Document) -> Result<()> {
-        unsafe {
-            return check_bool(|error| CBLDatabase_DeleteDocument(self.get_ref(), doc._ref, error));
-        }
+        unsafe { check_bool(|error| CBLDatabase_DeleteDocument(self.get_ref(), doc._ref, error)) }
     }
 
     /** Deletes a document from the database. Deletions are replicated. */
@@ -162,31 +158,29 @@ impl Database {
     ) -> Result<()> {
         let c_concurrency = concurrency as u8;
         unsafe {
-            return check_bool(|error| {
+            check_bool(|error| {
                 CBLDatabase_DeleteDocumentWithConcurrencyControl(
                     self.get_ref(),
                     doc._ref,
                     c_concurrency,
                     error,
                 )
-            });
+            })
         }
     }
 
     /** Purges a document. This removes all traces of the document from the database.
     Purges are _not_ replicated. If the document is changed on a server, it will be re-created */
     pub fn purge_document(&mut self, doc: &Document) -> Result<()> {
-        unsafe {
-            return check_bool(|error| CBLDatabase_PurgeDocument(self.get_ref(), doc._ref, error));
-        }
+        unsafe { check_bool(|error| CBLDatabase_PurgeDocument(self.get_ref(), doc._ref, error)) }
     }
 
     /** Purges a document, given only its ID. */
     pub fn purge_document_by_id(&mut self, id: &str) -> Result<()> {
         unsafe {
-            return check_bool(|error| {
+            check_bool(|error| {
                 CBLDatabase_PurgeDocumentByID(self.get_ref(), as_slice(id)._ref, error)
-            });
+            })
         }
     }
 
@@ -196,14 +190,15 @@ impl Database {
     pub fn document_expiration(&self, doc_id: &str) -> Result<Option<Timestamp>> {
         unsafe {
             let mut error = CBLError::default();
-            let exp =
-                CBLDatabase_GetDocumentExpiration(self.get_ref(), as_slice(doc_id)._ref, &mut error);
-            if exp < 0 {
-                return failure(error);
-            } else if exp == 0 {
-                return Ok(None);
-            } else {
-                return Ok(Some(Timestamp(exp)));
+            let exp = CBLDatabase_GetDocumentExpiration(
+                self.get_ref(),
+                as_slice(doc_id)._ref,
+                &mut error,
+            );
+            match exp {
+                0 => Ok(None),
+                _ if exp > 0 => Ok(Some(Timestamp(exp))),
+                _ => failure(error),
             }
         }
     }
@@ -215,9 +210,9 @@ impl Database {
             _ => 0,
         };
         unsafe {
-            return check_bool(|error| {
+            check_bool(|error| {
                 CBLDatabase_SetDocumentExpiration(self.get_ref(), as_slice(doc_id)._ref, exp, error)
-            });
+            })
         }
     }
 
@@ -229,7 +224,7 @@ impl Database {
         listener: ChangeListener,
     ) -> ListenerToken {
         unsafe {
-            let callback: *mut ::std::os::raw::c_void = std::mem::transmute(listener);
+            let callback = listener as *mut std::ffi::c_void;
 
             ListenerToken {
                 _ref: CBLDatabase_AddDocumentChangeListener(
@@ -245,11 +240,17 @@ impl Database {
 
 //////// DOCUMENT API:
 
+impl Default for Document {
+    fn default() -> Self {
+        unsafe { Document::wrap(CBLDocument_Create()) }
+    }
+}
+
 impl Document {
     /** Creates a new, empty document in memory, with an automatically generated unique ID.
     It will not be added to a database until saved. */
     pub fn new() -> Self {
-        unsafe { Document::wrap(CBLDocument_Create()) }
+        Self::default()
     }
 
     /** Creates a new, empty document in memory, with the given ID.
@@ -267,7 +268,7 @@ impl Document {
     /** Wrap a CBLDocument as a Document.
     The CBLDocument reference-count should already have been incremented from a type-safe source. */
     pub(crate) fn wrap(_ref: *mut CBLDocument) -> Self {
-        Document { _ref: _ref }
+        Document { _ref }
     }
 
     pub(crate) fn get_ref(&self) -> *mut CBLDocument {
@@ -297,7 +298,7 @@ impl Document {
     /** Returns a document's properties as a dictionary.
     This dictionary cannot be mutated; call `mutable_properties` if you want to make
     changes to the document's properties. */
-    pub fn properties<'a>(&'a self) -> Dict {
+    pub fn properties(&self) -> Dict {
         unsafe { Dict::wrap(CBLDocument_Properties(self._ref), self) }
     }
 
@@ -323,7 +324,7 @@ impl Document {
         unsafe {
             let mut err = CBLError::default();
             let ok = CBLDocument_SetJSON(self._ref, as_slice(json)._ref, &mut err);
-            return check_failure(ok, &err);
+            check_failure(ok, &err)
         }
     }
 }
