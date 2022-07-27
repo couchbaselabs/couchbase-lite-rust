@@ -43,9 +43,9 @@ pub mod fleece_mutable;
 pub mod logging;
 pub mod query;
 pub mod replicator;
+pub mod slice;
 
 mod c_api;
-pub mod slice;
 
 use self::c_api::{
     CBLListenerToken, CBLListener_Remove, CBLRefCounted, CBL_DumpInstances, CBL_InstanceCount,

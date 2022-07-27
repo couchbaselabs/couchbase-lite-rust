@@ -98,7 +98,6 @@ pub const fn from_bytes(s: &[u8]) -> Slice<&[u8]> {
 }
 
 impl FLSlice {
-    #[allow(clippy::cast_possible_truncation)]
     // A slice may be null, so in Rust terms it's an Option.
     pub unsafe fn as_byte_array<'a>(&self) -> Option<&'a [u8]> {
         if !self {
