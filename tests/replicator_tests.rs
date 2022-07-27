@@ -34,17 +34,14 @@ fn config() {
     utils::with_db(|db| {
         let repl_config_in = ReplicatorConfiguration {
             database: db.clone(),
-            endpoint: Endpoint::new_with_url("ws://localhost:4984/billeo-db".to_string()).unwrap(),
+            endpoint: Endpoint::new_with_url("ws://localhost:4984/billeo-db").unwrap(),
             replicator_type: ReplicatorType::PushAndPull,
             continuous: true,
             disable_auto_purge: true,
             max_attempts: 4,
             max_attempt_wait_time: 100,
             heartbeat: 120,
-            authenticator: Some(Authenticator::create_session(
-                "session_id".to_string(),
-                "cookie_name".to_string(),
-            )),
+            authenticator: Some(Authenticator::create_session("session_id", "cookie_name")),
             proxy: Some(ProxySettings {
                 proxy_type: ProxyType::HTTP,
                 hostname: Some("hostname".to_string()),
@@ -445,9 +442,9 @@ fn encryption_decryption() {
                 let mut doc_db1 = Document::new_with_id("foo");
                 let mut props = doc_db1.mutable_properties();
                 props.at("i").put_i64(1234);
-                props.at("s").put_encrypt(&Encryptable::create_with_string(
-                    "test_encryption".to_string(),
-                ));
+                props
+                    .at("s")
+                    .put_encrypt(&Encryptable::create_with_string("test_encryption"));
                 local_db1
                     .save_document_with_concurency_control(
                         &mut doc_db1,

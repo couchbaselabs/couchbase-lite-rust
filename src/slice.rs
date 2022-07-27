@@ -15,11 +15,13 @@
 // limitations under the License.
 //
 
-use super::c_api::*;
+use crate::{
+    CblRef,
+    c_api::{FLSlice, FLSliceResult, _FLBuf_Release, _FLBuf_Retain},
+};
 
 use std::borrow::Cow;
-use std::ffi::c_void;
-use std::ffi::CStr;
+use std::ffi::{CStr, c_void};
 use std::ptr::{self, drop_in_place};
 use std::str;
 
@@ -32,56 +34,63 @@ pub const NULL_SLICE: FLSlice = FLSlice {
 
 #[derive(Clone, Copy)]
 pub struct Slice<T> {
-    pub(crate) _ref: FLSlice,
+    pub(crate) cbl_ref: FLSlice,
     _owner: T,
 }
 
+impl<T> CblRef for Slice<T> {
+    type Output = FLSlice;
+    fn get_ref(&self) -> Self::Output {
+        self.cbl_ref
+    }
+}
+
 impl<T> Slice<T> {
-    pub(crate) const fn wrap(slice: FLSlice, _owner: T) -> Self {
+    pub(crate) const fn wrap(slice: FLSlice, owner: T) -> Self {
         Self {
-            _ref: slice,
-            _owner,
+            cbl_ref: slice,
+            _owner: owner,
         }
     }
 
     pub fn as_byte_array(&self) -> Option<&[u8]> {
-        unsafe { self._ref.as_byte_array() }
+        unsafe { self.get_ref().as_byte_array() }
     }
 
     pub fn as_str(&self) -> Option<&str> {
-        unsafe { self._ref.as_str() }
+        unsafe { self.get_ref().as_str() }
     }
 
     pub fn to_string(&self) -> Option<String> {
-        unsafe { self._ref.to_string() }
+        unsafe { self.get_ref().to_string() }
     }
 
     pub fn to_vec(&self) -> Option<Vec<u8>> {
-        unsafe { self._ref.to_vec() }
+        unsafe { self.get_ref().to_vec() }
     }
 
     pub fn map<F, FT>(&self, f: F) -> Option<FT>
     where
         F: Fn(&FLSlice) -> FT,
     {
-        self._ref.map(f)
+        self.get_ref().map(f)
     }
 }
 
-pub fn as_slice(s: &str) -> Slice<&str> {
+pub const fn from_str(s: &str) -> Slice<&str> {
     Slice::wrap(
         FLSlice {
-            buf: s.as_ptr() as *const c_void,
+            buf: s.as_ptr().cast::<c_void>(),
             size: s.len() as u64,
         },
         s,
     )
 }
 
-pub fn bytes_as_slice(s: &[u8]) -> Slice<&[u8]> {
+pub const fn from_bytes(s: &[u8]) -> Slice<&[u8]> {
     Slice::wrap(
         FLSlice {
-            buf: s.as_ptr() as *const c_void,
+            buf: s.as_ptr().cast::<c_void>(),
             size: s.len() as u64,
         },
         s,
@@ -95,7 +104,7 @@ impl FLSlice {
             return None;
         }
         return Some(std::slice::from_raw_parts(
-            self.buf as *const u8,
+            self.buf.cast::<u8>(),
             self.size as usize,
         ));
     }
@@ -107,23 +116,22 @@ impl FLSlice {
         }
     }
 
-    pub(crate) unsafe fn to_string(&self) -> Option<String> {
-        return self.as_str().map(|s| s.to_string());
+    pub(crate) unsafe fn to_string(self) -> Option<String> {
+        self.as_str().map(std::string::ToString::to_string)
     }
 
-    pub(crate) unsafe fn to_vec(&self) -> Option<Vec<u8>> {
-        return self.as_byte_array().map(|a| a.to_owned());
+    pub(crate) unsafe fn to_vec(self) -> Option<Vec<u8>> {
+        self.as_byte_array().map(std::borrow::ToOwned::to_owned)
     }
 
     pub(crate) fn map<F, T>(&self, f: F) -> Option<T>
     where
-        F: Fn(&FLSlice) -> T,
+        F: Fn(&Self) -> T,
     {
         if !self {
-            None
-        } else {
-            Some(f(self))
+            return Some(f(self));
         }
+        None
     }
 }
 
@@ -142,7 +150,7 @@ impl std::ops::Not for FLSlice {
 }
 
 impl FLSliceResult {
-    pub fn as_slice(&self) -> FLSlice {
+    pub const fn as_slice(&self) -> FLSlice {
         FLSlice {
             buf: self.buf,
             size: self.size,
@@ -179,15 +187,15 @@ impl Drop for FLSliceResult {
 //////// C STRINGS
 
 // Convenience to convert a raw `char*` to an unowned `&str`
-pub(crate) unsafe fn to_str<'a>(cstr: *const ::std::os::raw::c_char) -> Cow<'a, str> {
+pub unsafe fn to_str<'a>(cstr: *const ::std::os::raw::c_char) -> Cow<'a, str> {
     CStr::from_ptr(cstr).to_string_lossy()
 }
 
 // Convenience to convert a raw `char*` to an owned String
-pub(crate) unsafe fn to_string(cstr: *const ::std::os::raw::c_char) -> String {
+pub unsafe fn to_string(cstr: *const ::std::os::raw::c_char) -> String {
     to_str(cstr).to_string()
 }
 
-pub(crate) unsafe fn free_cstr(cstr: *const ::std::os::raw::c_char) {
+pub unsafe fn free_cstr(cstr: *const ::std::os::raw::c_char) {
     drop_in_place(cstr as *mut ::std::os::raw::c_char);
 }

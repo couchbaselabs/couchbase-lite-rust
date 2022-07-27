@@ -17,20 +17,24 @@
 
 #![allow(non_upper_case_globals)]
 
-use super::c_api::*;
+use crate::c_api::{
+    CBLError, CBLErrorDomain, CBLError_Message, FLError, kCBLDomain, kCBLFleeceDomain,
+    kCBLNetworkDomain, kCBLPOSIXDomain, kCBLSQLiteDomain, kCBLWebSocketDomain,
+};
 use enum_primitive::FromPrimitive;
 use std::fmt;
 
 //////// ERROR STRUCT:
 
 /** Error type. Wraps multiple types of errors in an enum. */
+#[derive(Clone, Copy, PartialEq)]
 pub struct Error {
     pub code: ErrorCode,
     pub(crate) internal_info: Option<u32>,
 }
 
 /** The enum that stores the error domain and code for an Error. */
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Copy, Clone)]
 pub enum ErrorCode {
     CouchbaseLite(CouchbaseLiteError),
     POSIX(i32),
@@ -123,27 +127,27 @@ enum_from_primitive! {
 }
 
 impl Error {
-    pub fn default() -> Error {
-        Error::new(&CBLError::default())
+    pub fn default() -> Self {
+        Self::new(&CBLError::default())
     }
 
-    pub(crate) fn new(err: &CBLError) -> Error {
-        Error {
+    pub(crate) fn new(err: &CBLError) -> Self {
+        Self {
             code: ErrorCode::new(err),
             internal_info: Some(err.internal_info),
         }
     }
 
-    pub(crate) fn cbl_error(e: CouchbaseLiteError) -> Error {
-        Error {
+    pub(crate) const fn cbl_error(e: CouchbaseLiteError) -> Self {
+        Self {
             code: ErrorCode::CouchbaseLite(e),
             internal_info: None,
         }
     }
 
-    pub(crate) fn fleece_error(e: FLError) -> Error {
-        Error {
-            code: ErrorCode::from_fleece(e),
+    pub(crate) fn fleece_error(e: FLError) -> Self {
+        Self {
+            code: ErrorCode::from_fleece(e as i32),
             internal_info: None,
         }
     }
@@ -209,47 +213,35 @@ impl fmt::Display for Error {
 }
 
 impl ErrorCode {
-    fn new(err: &CBLError) -> ErrorCode {
-        match err.domain as u32 {
-            kCBLDomain => {
-                if let Some(e) = CouchbaseLiteError::from_i32(err.code) {
-                    ErrorCode::CouchbaseLite(e)
-                } else {
-                    ErrorCode::untranslatable()
-                }
-            }
+    fn new(err: &CBLError) -> Self {
+        match u32::from(err.domain) {
+            kCBLDomain => CouchbaseLiteError::from_i32(err.code)
+                .map_or(Self::untranslatable(), Self::CouchbaseLite),
             kCBLNetworkDomain => {
-                if let Some(e) = NetworkError::from_i32(err.code as i32) {
-                    ErrorCode::Network(e)
-                } else {
-                    ErrorCode::untranslatable()
-                }
+                NetworkError::from_i32(err.code).map_or(Self::untranslatable(), Self::Network)
             }
-            kCBLPOSIXDomain => ErrorCode::POSIX(err.code),
-            kCBLSQLiteDomain => ErrorCode::SQLite(err.code),
-            kCBLFleeceDomain => ErrorCode::from_fleece(err.code as u32),
-            kCBLWebSocketDomain => ErrorCode::WebSocket(err.code),
-            _ => ErrorCode::untranslatable(),
+            kCBLPOSIXDomain => Self::POSIX(err.code),
+            kCBLSQLiteDomain => Self::SQLite(err.code),
+            kCBLFleeceDomain => Self::from_fleece(err.code),
+            kCBLWebSocketDomain => Self::WebSocket(err.code),
+            _ => Self::untranslatable(),
         }
     }
 
-    fn from_fleece(fleece_error: u32) -> ErrorCode {
-        if let Some(e) = FleeceError::from_u32(fleece_error) {
-            return ErrorCode::Fleece(e);
-        }
-        ErrorCode::untranslatable()
+    fn from_fleece(fleece_error: i32) -> Self {
+        FleeceError::from_i32(fleece_error).map_or(Self::untranslatable(), Self::Fleece)
     }
 
-    fn untranslatable() -> ErrorCode {
-        ErrorCode::CouchbaseLite(CouchbaseLiteError::UntranslatableError)
+    const fn untranslatable() -> Self {
+        Self::CouchbaseLite(CouchbaseLiteError::UntranslatableError)
     }
 }
 
 //////// CBLERROR UTILITIES:
-
+#[allow(clippy::derivable_impls)]
 impl Default for CBLError {
-    fn default() -> CBLError {
-        CBLError {
+    fn default() -> Self {
+        Self {
             domain: 0,
             code: 0,
             internal_info: 0,
@@ -328,11 +320,11 @@ where
     let n = func(&mut error);
     if n < 0 {
         // TODO: Better error mapping!
-        Err(std::io::Error::new(
+        return Err(std::io::Error::new(
             std::io::ErrorKind::NotFound,
             Error::new(&error),
-        ))
-    } else {
-        Ok(n as usize)
+        ));
     }
+    #[allow(clippy::cast_sign_loss)]
+    Ok(n as usize)
 }

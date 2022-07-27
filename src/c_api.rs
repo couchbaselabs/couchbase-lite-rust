@@ -25,4 +25,6 @@
 #![allow(dead_code)]
 #![allow(deref_nullptr)]
 #![allow(clippy::all)]
+#![allow(clippy::pedantic)]
+#![allow(clippy::nursery)]
 include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
