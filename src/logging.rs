@@ -15,7 +15,10 @@
 // limitations under the License.
 //
 
-use super::c_api::*;
+use super::c_api::{
+    CBLLogDomain, CBLLogLevel, CBLLog_SetCallback, CBLLog_SetCallbackLevel, CBLLog_SetConsoleLevel,
+    CBL_Log, FLString,
+};
 
 use enum_primitive::FromPrimitive;
 use std::fmt;

@@ -29,7 +29,7 @@ pub struct Blob {
 
 impl CblRef for Blob {
     type Output = *const CBLBlob;
-    const fn get_ref(&self) -> Self::Output {
+    fn get_ref(&self) -> Self::Output {
         self.cbl_ref
     }
 }
@@ -41,8 +41,8 @@ impl Blob {
     pub fn new_from_data(data: &[u8], content_type: &str) -> Blob {
         unsafe {
             let blob = CBLBlob_CreateWithData(
-                as_slice(content_type).get_ref(),
-                bytes_as_slice(data).get_ref(),
+                from_str(content_type).get_ref(),
+                from_bytes(data).get_ref(),
             );
             Blob { cbl_ref: blob }
         }
@@ -52,7 +52,7 @@ impl Blob {
     You should then add the blob to a document as a property, using [`Slot::put_blob`]. */
     pub fn new_from_stream(mut stream: BlobWriter, content_type: &str) -> Blob {
         unsafe {
-            let blob = CBLBlob_CreateWithStream(as_slice(content_type).get_ref(), stream.get_ref());
+            let blob = CBLBlob_CreateWithStream(from_str(content_type).get_ref(), stream.get_ref());
             stream.stream_ref = std::ptr::null_mut(); // stop `drop` from closing the stream
             Blob { cbl_ref: blob }
         }
@@ -100,11 +100,7 @@ impl Blob {
         unsafe {
             let mut err = CBLError::default();
             let content = CBLBlob_Content(self.get_ref(), &mut err).to_vec();
-            if let Some(c) = content {
-                Ok(c)
-            } else {
-                failure(err)
-            }
+            content.map_or_else(|| failure(err), Ok)
         }
     }
 
@@ -143,7 +139,7 @@ impl Clone for Blob {
 impl Slot<'_> {
     /** Stores a Blob reference in an Array or Dict. This is how you add a Blob to a Document. */
     pub fn put_blob(self, blob: &mut Blob) {
-        unsafe { FLSlot_SetBlob(self._ref, blob.get_ref() as *mut CBLBlob) }
+        unsafe { FLSlot_SetBlob(self.get_ref(), blob.get_ref() as *mut CBLBlob) }
     }
 }
 
@@ -157,7 +153,7 @@ pub struct BlobReader<'r> {
 
 impl<'r> CblRef for BlobReader<'r> {
     type Output = *mut CBLBlobReadStream;
-    const fn get_ref(&self) -> Self::Output {
+    fn get_ref(&self) -> Self::Output {
         self.stream_ref
     }
 }
@@ -168,7 +164,7 @@ impl<'r> std::io::Read for BlobReader<'r> {
             check_io(|err| {
                 CBLBlobReader_Read(
                     self.get_ref(),
-                    buf.as_mut_ptr() as *mut c_void,
+                    buf.as_mut_ptr().cast::<c_void>(),
                     buf.len() as u64,
                     err,
                 )
@@ -197,7 +193,7 @@ pub struct BlobWriter<'d> {
 
 impl<'d> CblRef for BlobWriter<'d> {
     type Output = *mut CBLBlobWriteStream;
-    const fn get_ref(&self) -> Self::Output {
+    fn get_ref(&self) -> Self::Output {
         self.stream_ref
     }
 }
@@ -223,7 +219,7 @@ impl<'r> std::io::Write for BlobWriter<'r> {
             check_io(|err| {
                 let ok = CBLBlobWriter_Write(
                     self.get_ref(),
-                    data.as_ptr() as *const c_void,
+                    data.as_ptr().cast::<c_void>(),
                     data.len() as u64,
                     err,
                 );

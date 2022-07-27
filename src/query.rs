@@ -15,9 +15,17 @@
 // limitations under the License.
 //
 
-use super::*;
-use super::slice::*;
-use super::c_api::*;
+use super::{
+    Array, CblRef, Database, Dict, MutableDict, Result, Value, failure, release, retain,
+    slice::from_str,
+    c_api::{
+        CBLDatabase_CreateQuery, CBLError, CBLQuery, CBLQueryLanguage, CBLQuery_ColumnCount,
+        CBLQuery_ColumnName, CBLQuery_Execute, CBLQuery_Explain, CBLQuery_Parameters,
+        CBLQuery_SetParameters, CBLResultSet, CBLResultSet_GetQuery, CBLResultSet_Next,
+        CBLResultSet_ResultArray, CBLResultSet_ResultDict, CBLResultSet_ValueAtIndex,
+        CBLResultSet_ValueForKey,
+    },
+};
 
 use std::marker::PhantomData;
 use std::os::raw::c_uint;
@@ -30,7 +38,14 @@ pub enum QueryLanguage {
 
 /** A compiled database query. */
 pub struct Query {
-    _ref: *mut CBLQuery,
+    cbl_ref: *mut CBLQuery,
+}
+
+impl CblRef for Query {
+    type Output = *mut CBLQuery;
+    fn get_ref(&self) -> Self::Output {
+        self.cbl_ref
+    }
 }
 
 impl Query {
@@ -46,7 +61,7 @@ impl Query {
             let q = CBLDatabase_CreateQuery(
                 db.get_ref(),
                 language as CBLQueryLanguage,
-                as_slice(str).get_ref(),
+                from_str(str).get_ref(),
                 &mut pos,
                 &mut err,
             );
@@ -55,7 +70,7 @@ impl Query {
                 return failure(err);
             }
 
-            Ok(Query { _ref: q })
+            Ok(Query { cbl_ref: q })
         }
     }
 
@@ -66,9 +81,9 @@ impl Query {
     Parameters are specified in the query source as
     e.g. `$PARAM` (N1QL) or `["$PARAM"]` (JSON). In this example, the `parameters` dictionary
     to this call should have a key `PARAM` that maps to the value of the parameter. */
-    pub fn set_parameters(&self, parameters: MutableDict) {
+    pub fn set_parameters(&self, parameters: &MutableDict) {
         unsafe {
-            CBLQuery_SetParameters(self._ref, parameters._ref);
+            CBLQuery_SetParameters(self.get_ref(), parameters.get_ref());
         }
     }
 
@@ -76,7 +91,7 @@ impl Query {
     pub fn parameters(&self) -> Dict {
         unsafe {
             Dict {
-                cbl_ref: CBLQuery_Parameters(self._ref),
+                cbl_ref: CBLQuery_Parameters(self.get_ref()),
                 owner: PhantomData,
             }
         }
@@ -87,7 +102,7 @@ impl Query {
     indicates a linear scan of the entire database, which should be avoided by adding an index.
     The strategy will also show which index(es), if any, are used. */
     pub fn explain(&self) -> String {
-        unsafe { CBLQuery_Explain(self._ref).to_string().unwrap() }
+        unsafe { CBLQuery_Explain(self.get_ref()).to_string().unwrap() }
     }
 
     /** Runs the query, returning the results as a `ResultSet` object, which is an iterator
@@ -95,18 +110,18 @@ impl Query {
     pub fn execute(&self) -> Result<ResultSet> {
         unsafe {
             let mut err = CBLError::default();
-            let r = CBLQuery_Execute(self._ref, &mut err);
+            let r = CBLQuery_Execute(self.get_ref(), &mut err);
             if r.is_null() {
                 return failure(err);
             }
-            Ok(ResultSet { _ref: r })
+            Ok(ResultSet { cbl_ref: r })
         }
     }
 
     /** Returns the number of columns in each result.
     This comes directly from the number of "SELECT..." values in the query string. */
     pub fn column_count(&self) -> usize {
-        unsafe { CBLQuery_ColumnCount(self._ref) as usize }
+        unsafe { CBLQuery_ColumnCount(self.get_ref()) as usize }
     }
 
     /** Returns the name of a column in the result.
@@ -116,7 +131,7 @@ impl Query {
     To give a column a custom name, use the `AS` syntax in the query.
     Every column is guaranteed to have a unique name. */
     pub fn column_name(&self, col: usize) -> Option<&str> {
-        unsafe { CBLQuery_ColumnName(self._ref, col as u32).as_str() }
+        unsafe { CBLQuery_ColumnName(self.get_ref(), col as u32).as_str() }
     }
 
     /** Returns the column names as a Vec. */
@@ -130,7 +145,7 @@ impl Query {
 impl Drop for Query {
     fn drop(&mut self) {
         unsafe {
-            release(self._ref);
+            release(self.get_ref());
         }
     }
 }
@@ -138,8 +153,8 @@ impl Drop for Query {
 impl Clone for Query {
     fn clone(&self) -> Self {
         unsafe {
-            Query {
-                _ref: retain(self._ref),
+            Self {
+                cbl_ref: retain(self.get_ref()),
             }
         }
     }
@@ -149,7 +164,14 @@ impl Clone for Query {
 
 /** An iterator over the rows resulting from running a query. */
 pub struct ResultSet {
-    _ref: *mut CBLResultSet,
+    cbl_ref: *mut CBLResultSet,
+}
+
+impl CblRef for ResultSet {
+    type Output = *mut CBLResultSet;
+    fn get_ref(&self) -> Self::Output {
+        self.cbl_ref
+    }
 }
 
 impl<'r> Iterator for &'r ResultSet {
@@ -157,10 +179,10 @@ impl<'r> Iterator for &'r ResultSet {
 
     fn next(&mut self) -> Option<Row<'r>> {
         unsafe {
-            if !CBLResultSet_Next(self._ref) {
+            if !CBLResultSet_Next(self.get_ref()) {
                 return None;
             }
-            Some(Row { results: &self })
+            Some(Row { results: self })
         }
     }
 }
@@ -168,7 +190,7 @@ impl<'r> Iterator for &'r ResultSet {
 impl Drop for ResultSet {
     fn drop(&mut self) {
         unsafe {
-            release(self._ref);
+            release(self.get_ref());
         }
     }
 }
@@ -185,7 +207,7 @@ impl<'r> Row<'r> {
     pub fn get(&self, index: isize) -> Value<'r> {
         unsafe {
             Value {
-                cbl_ref: CBLResultSet_ValueAtIndex(self.results._ref, index as c_uint),
+                cbl_ref: CBLResultSet_ValueAtIndex(self.results.get_ref(), index as c_uint),
                 owner: PhantomData,
             }
         }
@@ -195,7 +217,7 @@ impl<'r> Row<'r> {
     pub fn get_key(&self, key: &str) -> Value<'r> {
         unsafe {
             Value {
-                cbl_ref: CBLResultSet_ValueForKey(self.results._ref, as_slice(key).get_ref()),
+                cbl_ref: CBLResultSet_ValueForKey(self.results.get_ref(), from_str(key).get_ref()),
                 owner: PhantomData,
             }
         }
@@ -204,7 +226,7 @@ impl<'r> Row<'r> {
     /** Returns the number of columns. (This is the same as `Query`::column_count.) */
     pub fn column_count(&self) -> isize {
         unsafe {
-            let query = CBLResultSet_GetQuery(self.results._ref);
+            let query = CBLResultSet_GetQuery(self.results.get_ref());
             CBLQuery_ColumnCount(query) as isize
         }
     }
@@ -212,7 +234,7 @@ impl<'r> Row<'r> {
     /** Returns the name of a column. */
     pub fn column_name(&self, col: isize) -> Option<&str> {
         unsafe {
-            let query = CBLResultSet_GetQuery(self.results._ref);
+            let query = CBLResultSet_GetQuery(self.results.get_ref());
             CBLQuery_ColumnName(query, col as c_uint).as_str()
         }
     }
@@ -221,7 +243,7 @@ impl<'r> Row<'r> {
     pub fn as_array(&self) -> Array {
         unsafe {
             Array {
-                cbl_ref: CBLResultSet_ResultArray(self.results._ref),
+                cbl_ref: CBLResultSet_ResultArray(self.results.get_ref()),
                 owner: PhantomData,
             }
         }
@@ -231,7 +253,7 @@ impl<'r> Row<'r> {
     pub fn as_dict(&self) -> Dict {
         unsafe {
             Dict {
-                cbl_ref: CBLResultSet_ResultDict(self.results._ref),
+                cbl_ref: CBLResultSet_ResultDict(self.results.get_ref()),
                 owner: PhantomData,
             }
         }

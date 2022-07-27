@@ -68,7 +68,7 @@ unsafe extern "C" fn c_database_buffer_notifications(
 ) {
     let callback: BufferNotifications = std::mem::transmute(context);
 
-    let database = Database::retain(db as *mut CBLDatabase);
+    let database = Database::retain(db.cast::<CBLDatabase>());
 
     callback(&database);
 }
@@ -81,7 +81,7 @@ pub struct Database {
 
 impl CblRef for Database {
     type Output = *mut CBLDatabase;
-    const fn get_ref(&self) -> Self::Output {
+    fn get_ref(&self) -> Self::Output {
         self.cbl_ref
     }
 }
@@ -94,7 +94,7 @@ impl Database {
             cbl_ref: unsafe { retain(cbl_ref) },
         }
     }
-    pub(crate) fn wrap(cbl_ref: *mut CBLDatabase) -> Database {
+    pub(crate) const fn wrap(cbl_ref: *mut CBLDatabase) -> Database {
         Database { cbl_ref }
     }
 
@@ -107,7 +107,7 @@ impl Database {
         unsafe {
             if let Some(cfg) = config {
                 let mut c_config: CBLDatabaseConfiguration = CBLDatabaseConfiguration_Default();
-                c_config.directory = as_slice(cfg.directory.to_str().unwrap()).get_ref();
+                c_config.directory = from_str(cfg.directory.to_str().unwrap()).get_ref();
                 if let Some(encryption_key) = cfg.encryption_key.as_ref() {
                     c_config.encryptionKey = *encryption_key;
                 }
@@ -119,7 +119,7 @@ impl Database {
 
     unsafe fn _open(name: &str, config_ptr: *const CBLDatabaseConfiguration) -> Result<Database> {
         let mut err = CBLError::default();
-        let db_ref = CBLDatabase_Open(as_slice(name).get_ref(), config_ptr, &mut err);
+        let db_ref = CBLDatabase_Open(from_str(name).get_ref(), config_ptr, &mut err);
         if db_ref.is_null() {
             return failure(err);
         }
@@ -132,8 +132,8 @@ impl Database {
     pub fn exists<P: AsRef<Path>>(name: &str, in_directory: P) -> bool {
         unsafe {
             CBL_DatabaseExists(
-                as_slice(name).get_ref(),
-                as_slice(in_directory.as_ref().to_str().unwrap()).get_ref(),
+                from_str(name).get_ref(),
+                from_str(in_directory.as_ref().to_str().unwrap()).get_ref(),
             )
         }
     }
@@ -143,8 +143,8 @@ impl Database {
         unsafe {
             let mut error = CBLError::default();
             if CBL_DeleteDatabase(
-                as_slice(name).get_ref(),
-                as_slice(in_directory.as_ref().to_str().unwrap()).get_ref(),
+                from_str(name).get_ref(),
+                from_str(in_directory.as_ref().to_str().unwrap()).get_ref(),
                 &mut error,
             ) {
                 Ok(true)

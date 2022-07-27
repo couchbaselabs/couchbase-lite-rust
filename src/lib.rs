@@ -18,6 +18,21 @@
 //#![allow(unused_imports)]
 //#![allow(dead_code)]
 
+#![allow(clippy::missing_safety_doc)]
+#![allow(clippy::must_use_candidate)]
+#![allow(clippy::wrong_self_convention)]
+#![allow(clippy::module_name_repetitions)]
+#![allow(clippy::missing_errors_doc)]
+#![allow(clippy::doc_markdown)]
+#![allow(clippy::not_unsafe_ptr_arg_deref)]
+#![allow(clippy::cast_possible_truncation)]
+#![allow(clippy::cast_possible_wrap)]
+#![allow(clippy::copy_iterator)]
+#![allow(clippy::missing_panics_doc)]
+#![allow(clippy::use_self)]
+#![allow(clippy::cast_sign_loss)]
+#![allow(clippy::wildcard_imports)]
+
 #[macro_use]
 extern crate enum_primitive;
 
@@ -55,9 +70,10 @@ pub use replicator::*;
 
 pub trait CblRef {
     type Output;
-    const fn get_ref(&self) -> Self::Output;
+    fn get_ref(&self) -> Self::Output;
 }
 
+#[derive(Debug, Clone, Copy)]
 /// A time value for document expiration. Defined as milliseconds since the Unix epoch (1/1/1970.)
 pub struct Timestamp(pub i64);
 
@@ -68,14 +84,14 @@ pub struct ListenerToken {
 }
 
 impl ListenerToken {
-    pub fn new(cbl_ref: *mut CBLListenerToken) -> Self {
+    pub const fn new(cbl_ref: *mut CBLListenerToken) -> Self {
         Self { cbl_ref }
     }
 }
 
 impl CblRef for ListenerToken {
     type Output = *mut CBLListenerToken;
-    const fn get_ref(&self) -> Self::Output {
+    fn get_ref(&self) -> Self::Output {
         self.cbl_ref
     }
 }

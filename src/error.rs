@@ -134,7 +134,7 @@ impl Error {
         }
     }
 
-    pub(crate) fn cbl_error(e: CouchbaseLiteError) -> Error {
+    pub(crate) const fn cbl_error(e: CouchbaseLiteError) -> Error {
         Error {
             code: ErrorCode::CouchbaseLite(e),
             internal_info: None,
@@ -210,21 +210,11 @@ impl fmt::Display for Error {
 
 impl ErrorCode {
     fn new(err: &CBLError) -> ErrorCode {
-        match err.domain as u32 {
-            kCBLDomain => {
-                if let Some(e) = CouchbaseLiteError::from_i32(err.code) {
-                    ErrorCode::CouchbaseLite(e)
-                } else {
-                    ErrorCode::untranslatable()
-                }
-            }
-            kCBLNetworkDomain => {
-                if let Some(e) = NetworkError::from_i32(err.code as i32) {
-                    ErrorCode::Network(e)
-                } else {
-                    ErrorCode::untranslatable()
-                }
-            }
+        match u32::from(err.domain) {
+            kCBLDomain => CouchbaseLiteError::from_i32(err.code)
+                .map_or(ErrorCode::untranslatable(), ErrorCode::CouchbaseLite),
+            kCBLNetworkDomain => NetworkError::from_i32(err.code as i32)
+                .map_or(ErrorCode::untranslatable(), ErrorCode::Network),
             kCBLPOSIXDomain => ErrorCode::POSIX(err.code),
             kCBLSQLiteDomain => ErrorCode::SQLite(err.code),
             kCBLFleeceDomain => ErrorCode::from_fleece(err.code as u32),
@@ -234,19 +224,16 @@ impl ErrorCode {
     }
 
     fn from_fleece(fleece_error: u32) -> ErrorCode {
-        if let Some(e) = FleeceError::from_u32(fleece_error) {
-            return ErrorCode::Fleece(e);
-        }
-        ErrorCode::untranslatable()
+        FleeceError::from_u32(fleece_error).map_or(ErrorCode::untranslatable(), ErrorCode::Fleece)
     }
 
-    fn untranslatable() -> ErrorCode {
+    const fn untranslatable() -> ErrorCode {
         ErrorCode::CouchbaseLite(CouchbaseLiteError::UntranslatableError)
     }
 }
 
 //////// CBLERROR UTILITIES:
-
+#[allow(clippy::derivable_impls)]
 impl Default for CBLError {
     fn default() -> CBLError {
         CBLError {

@@ -8,7 +8,7 @@ pub struct Encryptable {
 
 impl CblRef for Encryptable {
     type Output = *mut CBLEncryptable;
-    const fn get_ref(&self) -> Self::Output {
+    fn get_ref(&self) -> Self::Output {
         self.cbl_ref
     }
 }
@@ -51,9 +51,9 @@ impl Encryptable {
         unsafe { CBLEncryptable_CreateWithDouble(value).into() }
     }
 
-    pub fn create_with_string(value: String) -> Encryptable {
+    pub fn create_with_string(value: &str) -> Encryptable {
         unsafe {
-            let slice = as_slice(value.as_str());
+            let slice = from_str(value);
             let copy_slice = FLSlice_Copy(slice.get_ref());
             let final_slice = copy_slice.as_slice();
             CBLEncryptable_CreateWithString(final_slice).into()
@@ -84,7 +84,7 @@ impl Encryptable {
 impl Drop for Encryptable {
     fn drop(&mut self) {
         unsafe {
-            release(self.get_ref() as *mut CBLEncryptable);
+            release(self.get_ref().cast::<CBLEncryptable>());
         }
     }
 }
@@ -93,7 +93,7 @@ impl Clone for Encryptable {
     fn clone(&self) -> Self {
         unsafe {
             Encryptable {
-                cbl_ref: retain(self.get_ref() as *mut CBLEncryptable),
+                cbl_ref: retain(self.get_ref().cast::<CBLEncryptable>()),
             }
         }
     }

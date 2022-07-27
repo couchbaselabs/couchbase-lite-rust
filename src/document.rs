@@ -27,7 +27,7 @@ pub struct Document {
 
 impl CblRef for Document {
     type Output = *mut CBLDocument;
-    const fn get_ref(&self) -> Self::Output {
+    fn get_ref(&self) -> Self::Output {
         self.cbl_ref
     }
 }
@@ -84,13 +84,13 @@ impl Database {
             // since Rust doesn't let us have MutableDocument subclass.
             let mut error = CBLError::default();
             let doc =
-                CBLDatabase_GetMutableDocument(self.get_ref(), as_slice(id).get_ref(), &mut error);
+                CBLDatabase_GetMutableDocument(self.get_ref(), from_str(id).get_ref(), &mut error);
             if doc.is_null() {
-                if error.code != 0 {
-                    return failure(error);
+                return if error.code == 0 {
+                    Err(Error::cbl_error(CouchbaseLiteError::NotFound))
                 } else {
-                    return Err(Error::cbl_error(CouchbaseLiteError::NotFound));
-                }
+                    failure(error)
+                };
             }
             Ok(Document::wrap(doc))
         }
@@ -149,7 +149,7 @@ impl Database {
                     error,
                 )
             }) {
-                Ok(_) => Ok(doc.to_owned()),
+                Ok(_) => Ok(doc.clone()),
                 Err(err) => Err(err),
             }
         }
@@ -193,7 +193,7 @@ impl Database {
     pub fn purge_document_by_id(&mut self, id: &str) -> Result<()> {
         unsafe {
             check_bool(|error| {
-                CBLDatabase_PurgeDocumentByID(self.get_ref(), as_slice(id).get_ref(), error)
+                CBLDatabase_PurgeDocumentByID(self.get_ref(), from_str(id).get_ref(), error)
             })
         }
     }
@@ -206,7 +206,7 @@ impl Database {
             let mut error = CBLError::default();
             let exp = CBLDatabase_GetDocumentExpiration(
                 self.get_ref(),
-                as_slice(doc_id).get_ref(),
+                from_str(doc_id).get_ref(),
                 &mut error,
             );
             match exp {
@@ -227,7 +227,7 @@ impl Database {
             check_bool(|error| {
                 CBLDatabase_SetDocumentExpiration(
                     self.get_ref(),
-                    as_slice(doc_id).get_ref(),
+                    from_str(doc_id).get_ref(),
                     exp,
                     error,
                 )
@@ -272,7 +272,7 @@ impl Document {
     /** Creates a new, empty document in memory, with the given ID.
     It will not be added to a database until saved. */
     pub fn new_with_id(id: &str) -> Self {
-        unsafe { Document::wrap(CBLDocument_CreateWithID(as_slice(id).get_ref())) }
+        unsafe { Document::wrap(CBLDocument_CreateWithID(from_str(id).get_ref())) }
     }
 
     /** Wrap a CBLDocument as a Document.
@@ -287,7 +287,7 @@ impl Document {
 
     /** Wrap a CBLDocument as a Document.
     The CBLDocument reference-count should already have been incremented from a type-safe source. */
-    pub(crate) fn wrap(cbl_ref: *mut CBLDocument) -> Self {
+    pub(crate) const fn wrap(cbl_ref: *mut CBLDocument) -> Self {
         Document { cbl_ref }
     }
 
@@ -326,8 +326,8 @@ impl Document {
 
     /** Replaces a document's properties with the contents of the dictionary.
     The dictionary is retained, not copied, so further changes _will_ affect the document. */
-    pub fn set_properties(&mut self, properties: MutableDict) {
-        unsafe { CBLDocument_SetProperties(self.get_ref(), properties._ref) }
+    pub fn set_properties(&mut self, properties: &MutableDict) {
+        unsafe { CBLDocument_SetProperties(self.get_ref(), properties.get_ref()) }
     }
 
     /** Returns a document's properties as a JSON string. */
@@ -339,7 +339,7 @@ impl Document {
     pub fn set_properties_as_json(&mut self, json: &str) -> Result<()> {
         unsafe {
             let mut err = CBLError::default();
-            let ok = CBLDocument_SetJSON(self.get_ref(), as_slice(json).get_ref(), &mut err);
+            let ok = CBLDocument_SetJSON(self.get_ref(), from_str(json).get_ref(), &mut err);
             check_failure(ok, &err)
         }
     }

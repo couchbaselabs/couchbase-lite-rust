@@ -15,12 +15,25 @@
 // limitations under the License.
 //
 
-use super::*;
-use super::slice::*;
-use super::error::*;
-use super::c_api::*;
-
-use encryptable::Encryptable;
+use crate::{
+    Blob, CblRef, MutableArray, MutableDict, Timestamp,
+    slice::{NULL_SLICE, from_bytes, from_str},
+    error::{Error, Result},
+    c_api::{
+        CBLEncryptable, FLArray, FLArrayIterator, FLArrayIterator_Begin, FLArrayIterator_GetCount,
+        FLArrayIterator_GetValue, FLArrayIterator_GetValueAt, FLArrayIterator_Next, FLArray_Count,
+        FLArray_Get, FLArray_IsEmpty, FLDict, FLDictIterator, FLDictIterator_Begin,
+        FLDictIterator_GetCount, FLDictIterator_GetKeyString, FLDictIterator_GetValue,
+        FLDictIterator_Next, FLDictKey, FLDictKey_GetString, FLDictKey_Init, FLDict_Count,
+        FLDict_Get, FLDict_GetEncryptableValue, FLDict_GetWithKey, FLDict_IsBlob, FLDict_IsEmpty,
+        FLDict_IsEncryptableValue, FLDoc, FLDoc_FromJSON, FLDoc_FromResultData, FLDoc_GetData,
+        FLDoc_GetRoot, FLDoc_Release, FLDoc_Retain, FLError, FLError_kFLInvalidData, FLSlice_Copy,
+        FLValue, FLValue_AsArray, FLValue_AsBool, FLValue_AsData, FLValue_AsDict, FLValue_AsDouble,
+        FLValue_AsFloat, FLValue_AsInt, FLValue_AsString, FLValue_AsTimestamp, FLValue_AsUnsigned,
+        FLValue_GetType, FLValue_IsEqual, FLValue_IsInteger, FLValue_ToJSON, _FLValue,
+    },
+    encryptable::Encryptable,
+};
 
 use enum_primitive::FromPrimitive;
 use std::collections::HashSet;
@@ -39,34 +52,41 @@ pub enum Trust {
 
 /// Equivalent to FLDoc
 pub struct Fleece {
-    pub(crate) _ref: FLDoc,
+    pub(crate) cbl_ref: FLDoc,
+}
+
+impl CblRef for Fleece {
+    type Output = FLDoc;
+    fn get_ref(&self) -> Self::Output {
+        self.cbl_ref
+    }
 }
 
 impl Fleece {
     pub fn parse(data: &[u8], trust: Trust) -> Result<Self> {
         unsafe {
-            let copied = FLSlice_Copy(bytes_as_slice(data).get_ref());
+            let copied = FLSlice_Copy(from_bytes(data).get_ref());
             let doc = FLDoc_FromResultData(copied, trust as u32, ptr::null_mut(), NULL_SLICE);
             if doc.is_null() {
                 return Err(Error::fleece_error(FLError_kFLInvalidData));
             }
-            return Ok(Fleece { _ref: doc });
+            Ok(Fleece { cbl_ref: doc })
         }
     }
 
     pub fn parse_json(json: &str) -> Result<Self> {
         unsafe {
             let mut error: FLError = 0;
-            let doc = FLDoc_FromJSON(as_slice(json).get_ref(), &mut error);
+            let doc = FLDoc_FromJSON(from_str(json).get_ref(), &mut error);
             if doc.is_null() {
                 return Err(Error::fleece_error(error));
             }
-            return Ok(Fleece { _ref: doc });
+            Ok(Fleece { cbl_ref: doc })
         }
     }
 
     pub fn root(&self) -> Value {
-        unsafe { Value::wrap(FLDoc_GetRoot(self._ref), self) }
+        unsafe { Value::wrap(FLDoc_GetRoot(self.get_ref()), self) }
     }
 
     pub fn as_array(&self) -> Array {
@@ -78,16 +98,14 @@ impl Fleece {
     }
 
     pub fn data<'a>(&self) -> &'a [u8] {
-        unsafe {
-            return FLDoc_GetData(self._ref).as_byte_array().unwrap();
-        }
+        unsafe { FLDoc_GetData(self.get_ref()).as_byte_array().unwrap() }
     }
 }
 
 impl Drop for Fleece {
     fn drop(&mut self) {
         unsafe {
-            FLDoc_Release(self._ref);
+            FLDoc_Release(self.get_ref());
         }
     }
 }
@@ -95,9 +113,9 @@ impl Drop for Fleece {
 impl Clone for Fleece {
     fn clone(&self) -> Self {
         unsafe {
-            return Fleece {
-                _ref: FLDoc_Retain(self._ref),
-            };
+            Fleece {
+                cbl_ref: FLDoc_Retain(self.get_ref()),
+            }
         }
     }
 }
@@ -105,7 +123,7 @@ impl Clone for Fleece {
 //////// VALUE
 
 enum_from_primitive! {
-    #[derive(Debug, PartialEq)]
+    #[derive(Debug, PartialEq, Clone, Copy)]
     pub enum ValueType {
         Undefined = -1,  // Type of a NULL pointer, i.e. no such value, like JSON `undefined`
         Null = 0,        // Equivalent to a JSON 'null'
@@ -155,7 +173,7 @@ pub struct Value<'f> {
 
 impl<'f> CblRef for Value<'f> {
     type Output = FLValue;
-    const fn get_ref(&self) -> Self::Output {
+    fn get_ref(&self) -> Self::Output {
         self.cbl_ref
     }
 }
@@ -166,7 +184,7 @@ impl<'f> Value<'f> {
         owner: PhantomData,
     };
 
-    pub(crate) fn wrap<'a, T>(value: FLValue, _owner: &'a T) -> Value<'a> {
+    pub(crate) const fn wrap<T>(value: FLValue, _owner: &T) -> Value {
         Value {
             cbl_ref: value,
             owner: PhantomData,
@@ -174,10 +192,9 @@ impl<'f> Value<'f> {
     }
 
     pub fn get_type(&self) -> ValueType {
-        unsafe {
-            return ValueType::from_i32(FLValue_GetType(self.get_ref())).unwrap();
-        }
+        unsafe { ValueType::from_i32(FLValue_GetType(self.get_ref())).unwrap() }
     }
+
     pub fn is_type(&self, t: ValueType) -> bool {
         self.get_type() == t
     }
@@ -250,7 +267,7 @@ impl<'f> Value<'f> {
             if t == 0 {
                 return None;
             }
-            return Some(Timestamp(t));
+            Some(Timestamp(t))
         }
     }
 
@@ -325,7 +342,7 @@ impl fmt::Debug for Value<'_> {
 
 impl fmt::Display for Value<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        return f.write_str(&self.to_json());
+        f.write_str(&self.to_json())
     }
 }
 
@@ -340,13 +357,13 @@ pub struct Array<'f> {
 
 impl<'f> CblRef for Array<'f> {
     type Output = FLArray;
-    const fn get_ref(&self) -> Self::Output {
+    fn get_ref(&self) -> Self::Output {
         self.cbl_ref
     }
 }
 
 impl<'f> Array<'f> {
-    pub(crate) fn wrap<'a, T>(array: FLArray, _owner: &'a T) -> Array<'a> {
+    pub(crate) const fn wrap<T>(array: FLArray, _owner: &T) -> Array {
         Array {
             cbl_ref: array,
             owner: PhantomData,
@@ -374,9 +391,9 @@ impl<'f> Array<'f> {
             let mut i = MaybeUninit::<FLArrayIterator>::uninit();
             FLArrayIterator_Begin(self.get_ref(), i.as_mut_ptr());
             ArrayIterator {
-                _innards: i.assume_init(),
-                _owner: self.owner,
-                _len: self.count() as usize,
+                innards: i.assume_init(),
+                owner: self.owner,
+                len: self.count() as usize,
             }
         }
     }
@@ -384,7 +401,7 @@ impl<'f> Array<'f> {
 
 impl<'f> FleeceReference for Array<'f> {
     fn _fleece_ref(&self) -> FLValue {
-        self.get_ref() as FLValue
+        self.get_ref().cast::<_FLValue>()
     }
 }
 
@@ -443,20 +460,20 @@ impl<'a> IntoIterator for Array<'a> {
 //////// ARRAY ITERATOR
 
 pub struct ArrayIterator<'a> {
-    _innards: FLArrayIterator,
-    _owner: PhantomData<&'a Fleece>,
-    _len: usize,
+    innards: FLArrayIterator,
+    owner: PhantomData<&'a Fleece>,
+    len: usize,
 }
 
 impl<'a> ArrayIterator<'a> {
     pub fn count(&self) -> u32 {
-        unsafe { FLArrayIterator_GetCount(&self._innards) }
+        unsafe { FLArrayIterator_GetCount(&self.innards) }
     }
 
     pub fn get(&self, index: usize) -> Value {
         unsafe {
             Value::wrap(
-                FLArrayIterator_GetValueAt(&self._innards, index as u32),
+                FLArrayIterator_GetValueAt(&self.innards, index as u32),
                 self,
             )
         }
@@ -468,11 +485,11 @@ impl<'f> Iterator for ArrayIterator<'f> {
 
     fn next(&mut self) -> Option<Value<'f>> {
         unsafe {
-            let val = FLArrayIterator_GetValue(&self._innards);
+            let val = FLArrayIterator_GetValue(&self.innards);
             if val.is_null() {
                 return None;
             }
-            FLArrayIterator_Next(&mut self._innards);
+            FLArrayIterator_Next(&mut self.innards);
             Some(Value {
                 cbl_ref: val,
                 owner: PhantomData,
@@ -485,7 +502,7 @@ impl<'f> std::iter::FusedIterator for ArrayIterator<'f> {}
 
 impl<'f> ExactSizeIterator for ArrayIterator<'f> {
     fn len(&self) -> usize {
-        self._len
+        self.len
     }
 }
 
@@ -510,20 +527,20 @@ pub struct Dict<'f> {
 
 impl<'f> CblRef for Dict<'f> {
     type Output = FLDict;
-    const fn get_ref(&self) -> Self::Output {
+    fn get_ref(&self) -> Self::Output {
         self.cbl_ref
     }
 }
 
 impl<'f> Dict<'f> {
-    pub(crate) fn new(dict: FLDict) -> Self {
+    pub(crate) const fn new(dict: FLDict) -> Self {
         Self {
             cbl_ref: dict,
             owner: PhantomData,
         }
     }
 
-    pub(crate) fn wrap<'a, T>(dict: FLDict, _owner: &'a T) -> Dict<'a> {
+    pub(crate) const fn wrap<T>(dict: FLDict, _owner: &T) -> Dict {
         Dict {
             cbl_ref: dict,
             owner: PhantomData,
@@ -532,7 +549,7 @@ impl<'f> Dict<'f> {
 
     pub fn as_value(&self) -> Value<'f> {
         Value {
-            cbl_ref: self.get_ref() as FLValue,
+            cbl_ref: self.get_ref().cast::<_FLValue>(),
             owner: self.owner,
         }
     }
@@ -551,7 +568,7 @@ impl<'f> Dict<'f> {
     pub fn get(&self, key: &str) -> Value<'f> {
         unsafe {
             Value {
-                cbl_ref: FLDict_Get(self.get_ref(), as_slice(key).get_ref()),
+                cbl_ref: FLDict_Get(self.get_ref(), from_str(key).get_ref()),
                 owner: self.owner,
             }
         }
@@ -560,7 +577,7 @@ impl<'f> Dict<'f> {
     pub fn get_key(&self, key: &mut DictKey) -> Value<'f> {
         unsafe {
             Value {
-                cbl_ref: FLDict_GetWithKey(self.get_ref(), &mut key._innards),
+                cbl_ref: FLDict_GetWithKey(self.get_ref(), &mut key.innards),
                 owner: self.owner,
             }
         }
@@ -578,9 +595,9 @@ impl<'f> Dict<'f> {
             let mut i = MaybeUninit::<FLDictIterator>::uninit();
             FLDictIterator_Begin(self.get_ref(), i.as_mut_ptr());
             DictIterator {
-                _innards: i.assume_init(),
-                _owner: self.owner,
-                _len: self.count() as usize,
+                innards: i.assume_init(),
+                owner: self.owner,
+                len: self.count() as usize,
             }
         }
     }
@@ -594,7 +611,7 @@ impl<'f> Dict<'f> {
 
 impl<'f> FleeceReference for Dict<'f> {
     fn _fleece_ref(&self) -> FLValue {
-        self.get_ref() as FLValue
+        self.get_ref().cast::<_FLValue>()
     }
 }
 
@@ -647,34 +664,34 @@ impl<'a> IntoIterator for Dict<'a> {
 //////// DICT KEY
 
 pub struct DictKey {
-    pub(crate) _innards: FLDictKey,
+    pub(crate) innards: FLDictKey,
 }
 
 impl DictKey {
     pub fn new(key: &str) -> DictKey {
         unsafe {
             DictKey {
-                _innards: FLDictKey_Init(as_slice(key).get_ref()),
+                innards: FLDictKey_Init(from_str(key).get_ref()),
             }
         }
     }
 
     pub fn string(&self) -> &str {
-        unsafe { FLDictKey_GetString(&self._innards).as_str().unwrap() }
+        unsafe { FLDictKey_GetString(&self.innards).as_str().unwrap() }
     }
 }
 
 //////// DICT ITERATOR
 
 pub struct DictIterator<'a> {
-    _innards: FLDictIterator,
-    _owner: PhantomData<&'a Fleece>,
-    _len: usize,
+    innards: FLDictIterator,
+    owner: PhantomData<&'a Fleece>,
+    len: usize,
 }
 
 impl<'a> DictIterator<'a> {
     pub fn count(&self) -> u32 {
-        unsafe { FLDictIterator_GetCount(&self._innards) }
+        unsafe { FLDictIterator_GetCount(&self.innards) }
     }
 }
 
@@ -683,14 +700,12 @@ impl<'a> Iterator for DictIterator<'a> {
 
     fn next(&mut self) -> Option<Self::Item> {
         unsafe {
-            let val = FLDictIterator_GetValue(&self._innards);
+            let val = FLDictIterator_GetValue(&self.innards);
             if val.is_null() {
                 return None;
             }
-            let key = FLDictIterator_GetKeyString(&self._innards)
-                .as_str()
-                .unwrap();
-            FLDictIterator_Next(&mut self._innards);
+            let key = FLDictIterator_GetKeyString(&self.innards).as_str().unwrap();
+            FLDictIterator_Next(&mut self.innards);
             Some((
                 key,
                 Value {
@@ -706,7 +721,7 @@ impl<'a> std::iter::FusedIterator for DictIterator<'a> {}
 
 impl<'a> ExactSizeIterator for DictIterator<'a> {
     fn len(&self) -> usize {
-        self._len
+        self.len
     }
 }
 

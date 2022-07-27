@@ -15,13 +15,13 @@
 // limitations under the License.
 //
 
-use crate::CblRef;
-
-use super::c_api::*;
+use super::{
+    CblRef,
+    c_api::{FLSlice, FLSliceResult, _FLBuf_Release, _FLBuf_Retain},
+};
 
 use std::borrow::Cow;
-use std::ffi::c_void;
-use std::ffi::CStr;
+use std::ffi::{CStr, c_void};
 use std::ptr::{self, drop_in_place};
 use std::str;
 
@@ -40,7 +40,7 @@ pub struct Slice<T> {
 
 impl<T> CblRef for Slice<T> {
     type Output = FLSlice;
-    const fn get_ref(&self) -> Self::Output {
+    fn get_ref(&self) -> Self::Output {
         self.cbl_ref
     }
 }
@@ -77,7 +77,7 @@ impl<T> Slice<T> {
     }
 }
 
-pub fn as_slice(s: &str) -> Slice<&str> {
+pub const fn from_str(s: &str) -> Slice<&str> {
     Slice::wrap(
         FLSlice {
             buf: s.as_ptr().cast::<c_void>(),
@@ -87,7 +87,7 @@ pub fn as_slice(s: &str) -> Slice<&str> {
     )
 }
 
-pub fn bytes_as_slice(s: &[u8]) -> Slice<&[u8]> {
+pub const fn from_bytes(s: &[u8]) -> Slice<&[u8]> {
     Slice::wrap(
         FLSlice {
             buf: s.as_ptr().cast::<c_void>(),
@@ -98,6 +98,7 @@ pub fn bytes_as_slice(s: &[u8]) -> Slice<&[u8]> {
 }
 
 impl FLSlice {
+    #[allow(clippy::cast_possible_truncation)]
     // A slice may be null, so in Rust terms it's an Option.
     pub unsafe fn as_byte_array<'a>(&self) -> Option<&'a [u8]> {
         if !self {
