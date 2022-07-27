@@ -29,15 +29,24 @@ use std::fs;
 use std::path::PathBuf;
 
 // Where to find the Couchbase Lite headers and library:    //TODO: Make this easily configurable
-static CBL_INCLUDE_DIR : &str   = "libcblite-3.0.1/include";
-static CBL_LIB_DIR : &str       = "libcblite-3.0.1/lib";
-static CBL_LIB_FILENAME : &str  = "libcblite.dylib";
+static CBL_INCLUDE_DIR: &str = "libcblite-3.0.1/include";
+static CBL_LIB_DIR: &str = "libcblite-3.0.1/lib";
+
+#[cfg(target_os = "macos")]
+static CBL_LIB_FILENAME: &str = "libcblite.dylib";
+
+#[cfg(target_os = "linux")]
+static CBL_LIB_FILENAME: &str = "libcblite.so";
 
 // Where to find Clang and LLVM libraries:
-static DEFAULT_LIBCLANG_PATH : &str = "/usr/local/Cellar/llvm/12.0.1/lib";
+#[cfg(target_os = "macos")]
+static DEFAULT_LIBCLANG_PATH: &str = "/usr/local/Cellar/llvm/12.0.1/lib";
 
-static STATIC_LINK_CBL : bool = false;
-static CBL_SRC_DIR : &str = "../../CBL_C";
+#[cfg(target_os = "linux")]
+static DEFAULT_LIBCLANG_PATH: &str = "/usr/lib/";
+
+static STATIC_LINK_CBL: bool = false;
+static CBL_SRC_DIR: &str = "../../CBL_C";
 
 fn main() {
     // Set LIBCLANG_PATH environment variable if it's not already set:
@@ -56,7 +65,7 @@ fn main() {
         .header("src/wrapper.h")
         //.header("libcblite-3.0.1/include/cbl/CouchbaseLite.h")
         // C '#include' search paths:
-        .clang_arg("-I".to_owned() + CBL_INCLUDE_DIR)
+        .clang_arg(format!("-I{}", CBL_INCLUDE_DIR))
         // Which symbols to generate bindings for:
         .whitelist_type("CBL.*")
         .whitelist_type("FL.*")
@@ -64,6 +73,7 @@ fn main() {
         .whitelist_var("k?FL.*")
         .whitelist_function("CBL.*")
         .whitelist_function("_?FL.*")
+        .no_copy("FLSliceResult")
         .clang_arg(format!("-isysroot{}", sdk_root))
         // Tell cargo to invalidate the built crate whenever any of the
         // included header files changed.
@@ -89,11 +99,20 @@ fn main() {
         //       had to be thinned with e.g. `libXXX.a -thin x86_64 -output libXXX-x86.a`.
         let cblite_src_path = PathBuf::from(CBL_SRC_DIR);
         let root = cblite_src_path.to_str().unwrap();
-        
+
         println!("cargo:rustc-link-search={}/build_cmake", root);
-        println!("cargo:rustc-link-search={}/build_cmake/vendor/couchbase-lite-core", root);
-        println!("cargo:rustc-link-search={}/build_cmake/vendor/couchbase-lite-core/Networking/BLIP", root);
-        println!("cargo:rustc-link-search={}/build_cmake/vendor/couchbase-lite-core/vendor/fleece", root);
+        println!(
+            "cargo:rustc-link-search={}/build_cmake/vendor/couchbase-lite-core",
+            root
+        );
+        println!(
+            "cargo:rustc-link-search={}/build_cmake/vendor/couchbase-lite-core/Networking/BLIP",
+            root
+        );
+        println!(
+            "cargo:rustc-link-search={}/build_cmake/vendor/couchbase-lite-core/vendor/fleece",
+            root
+        );
         println!("cargo:rustc-link-search={}/build_cmake/vendor/couchbase-lite-core/vendor/mbedtls/library", root);
         println!("cargo:rustc-link-search={}/build_cmake/vendor/couchbase-lite-core/vendor/mbedtls/crypto/library", root);
         println!("cargo:rustc-link-search={}/build_cmake/vendor/couchbase-lite-core/vendor/sqlite3-unicodesn", root);
@@ -118,7 +137,6 @@ fn main() {
         println!("cargo:rustc-link-lib=framework=CFNetwork");
         println!("cargo:rustc-link-lib=framework=Security");
         println!("cargo:rustc-link-lib=framework=SystemConfiguration");
-
     } else {
         // Link against and copy the CBL dynamic library:
         let src = PathBuf::from(CBL_LIB_DIR).join(CBL_LIB_FILENAME);
