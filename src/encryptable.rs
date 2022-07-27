@@ -1,6 +1,15 @@
-use super::c_api::*;
-use super::slice::*;
-use super::*;
+use crate::{
+    c_api::{
+        CBLEncryptable, CBLEncryptable_CreateWithArray, CBLEncryptable_CreateWithBool,
+        CBLEncryptable_CreateWithDict, CBLEncryptable_CreateWithDouble,
+        CBLEncryptable_CreateWithFloat, CBLEncryptable_CreateWithInt,
+        CBLEncryptable_CreateWithNull, CBLEncryptable_CreateWithString,
+        CBLEncryptable_CreateWithUInt, CBLEncryptable_CreateWithValue, CBLEncryptable_Properties,
+        CBLEncryptable_Value, FLSlice_Copy,
+    },
+    slice::from_str,
+    Array, CblRef, Dict, Value, release, retain,
+};
 
 pub struct Encryptable {
     cbl_ref: *mut CBLEncryptable,

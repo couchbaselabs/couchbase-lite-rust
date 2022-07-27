@@ -15,7 +15,7 @@
 // limitations under the License.
 //
 
-use super::{
+use crate::{
     Array, CblRef, Database, Dict, MutableDict, Result, Value, failure, release, retain,
     slice::from_str,
     c_api::{

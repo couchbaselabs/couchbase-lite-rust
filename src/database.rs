@@ -15,12 +15,23 @@
 // limitations under the License.
 //
 
-use super::*;
-use super::slice::*;
-use super::error::*;
-use super::c_api::*;
+use crate::{
+    CblRef, ListenerToken, release, retain,
+    slice::from_str,
+    error::{Result, check_bool, failure},
+    c_api::{
+        CBLDatabase, CBLDatabaseConfiguration, CBLDatabaseConfiguration_Default,
+        CBLDatabase_AddChangeListener, CBLDatabase_BeginTransaction,
+        CBLDatabase_BufferNotifications, CBLDatabase_Count, CBLDatabase_Delete,
+        CBLDatabase_EndTransaction, CBLDatabase_Name, CBLDatabase_Open, CBLDatabase_Path,
+        CBLDatabase_PerformMaintenance, CBLDatabase_SendNotifications, CBLEncryptionKey, CBLError,
+        CBL_DatabaseExists, CBL_DeleteDatabase, FLString, kCBLMaintenanceTypeCompact,
+        kCBLMaintenanceTypeFullOptimize, kCBLMaintenanceTypeIntegrityCheck,
+        kCBLMaintenanceTypeOptimize, kCBLMaintenanceTypeReindex,
+    },
+};
 
-use std::path::*;
+use std::path::{Path, PathBuf};
 use std::ptr;
 
 /** Database configuration options. */

@@ -15,9 +15,18 @@
 // limitations under the License.
 //
 
-use super::*;
-use crate::slice::*;
-use crate::c_api::*;
+use crate::{
+    CblRef, Database, Dict, FleeceReference, Result, Slot, check_io, check_ptr, failure, release,
+    retain,
+    slice::{from_bytes, from_str},
+    c_api::{
+        CBLBlob, CBLBlobReadStream, CBLBlobReader_Close, CBLBlobReader_Read, CBLBlobWriteStream,
+        CBLBlobWriter_Close, CBLBlobWriter_Create, CBLBlobWriter_Write, CBLBlob_Content,
+        CBLBlob_ContentType, CBLBlob_CreateWithData, CBLBlob_CreateWithStream, CBLBlob_Digest,
+        CBLBlob_Length, CBLBlob_OpenContentStream, CBLBlob_Properties, CBLError, FLDict_GetBlob,
+        FLSlot_SetBlob, FLValue_AsDict,
+    },
+};
 
 use std::ffi::c_void;
 use std::marker::PhantomData;

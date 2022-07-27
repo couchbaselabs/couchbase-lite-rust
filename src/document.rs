@@ -15,9 +15,23 @@
 // limitations under the License.
 //
 
-use super::c_api::*;
-use super::slice::*;
-use super::*;
+use crate::{
+    c_api::{
+        CBLDatabase, CBLDatabase_AddDocumentChangeListener, CBLDatabase_DeleteDocument,
+        CBLDatabase_DeleteDocumentWithConcurrencyControl, CBLDatabase_GetDocumentExpiration,
+        CBLDatabase_GetMutableDocument, CBLDatabase_PurgeDocument, CBLDatabase_PurgeDocumentByID,
+        CBLDatabase_SaveDocument, CBLDatabase_SaveDocumentWithConcurrencyControl,
+        CBLDatabase_SaveDocumentWithConflictHandler, CBLDatabase_SetDocumentExpiration,
+        CBLDocument, CBLDocument_Create, CBLDocument_CreateJSON, CBLDocument_CreateWithID,
+        CBLDocument_ID, CBLDocument_MutableProperties, CBLDocument_Properties,
+        CBLDocument_RevisionID, CBLDocument_Sequence, CBLDocument_SetJSON,
+        CBLDocument_SetProperties, CBLError, FLString, kCBLConcurrencyControlFailOnConflict,
+        kCBLConcurrencyControlLastWriteWins,
+    },
+    slice::from_str,
+    CblRef, CouchbaseLiteError, Database, Dict, Error, ListenerToken, MutableDict, Result,
+    Timestamp, check_bool, check_failure, failure, release, retain,
+};
 
 /** An in-memory copy of a document. */
 #[derive(Debug)]

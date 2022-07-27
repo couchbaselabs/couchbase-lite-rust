@@ -15,7 +15,7 @@
 // limitations under the License.
 //
 
-use super::{
+use crate::{
     CblRef,
     c_api::{FLSlice, FLSliceResult, _FLBuf_Release, _FLBuf_Retain},
 };

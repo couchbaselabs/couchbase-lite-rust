@@ -15,7 +15,7 @@
 // limitations under the License.
 //
 
-use super::{
+use crate::{
     CblRef, CouchbaseLiteError, Error, ErrorCode, Result, encryptable,
     slice::{from_bytes, from_str},
     c_api::{
@@ -28,9 +28,8 @@ use super::{
         FLValue_Retain,
     },
     fleece::{Array, ArrayIterator, Dict, DictIterator, DictKey, FleeceReference, Value},
+    encryptable::Encryptable,
 };
-
-use encryptable::Encryptable;
 
 use std::collections::HashMap;
 use std::fmt;

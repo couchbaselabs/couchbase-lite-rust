@@ -17,7 +17,10 @@
 
 #![allow(non_upper_case_globals)]
 
-use super::c_api::*;
+use crate::c_api::{
+    CBLError, CBLErrorDomain, CBLError_Message, FLError, kCBLDomain, kCBLFleeceDomain,
+    kCBLNetworkDomain, kCBLPOSIXDomain, kCBLSQLiteDomain, kCBLWebSocketDomain,
+};
 use enum_primitive::FromPrimitive;
 use std::fmt;
 

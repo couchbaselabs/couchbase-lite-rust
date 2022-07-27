@@ -31,7 +31,6 @@
 #![allow(clippy::missing_panics_doc)]
 #![allow(clippy::use_self)]
 #![allow(clippy::cast_sign_loss)]
-#![allow(clippy::wildcard_imports)]
 
 #[macro_use]
 extern crate enum_primitive;

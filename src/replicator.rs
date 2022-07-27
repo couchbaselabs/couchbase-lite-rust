@@ -21,24 +21,25 @@ use std::{
     ptr,
     collections::{HashMap, HashSet},
 };
-use super::{
+use crate::{
     Array, CblRef, Database, Dict, Document, Error, ListenerToken, MutableDict, Result,
     check_error, release, retain,
     slice::{from_str, from_bytes, self},
-};
-use super::c_api::{
-    CBLAuth_CreatePassword, CBLAuth_CreateSession, CBLAuthenticator, CBLDocument, CBLDocumentFlags,
-    CBLEndpoint, CBLEndpoint_CreateWithLocalDB, CBLEndpoint_CreateWithURL, CBLError,
-    CBLProxySettings, CBLProxyType, CBLReplicatedDocument, CBLReplicator,
-    CBLReplicatorConfiguration, CBLReplicatorStatus, CBLReplicatorType,
-    CBLReplicator_AddChangeListener, CBLReplicator_AddDocumentReplicationListener,
-    CBLReplicator_Config, CBLReplicator_Create, CBLReplicator_IsDocumentPending,
-    CBLReplicator_PendingDocumentIDs, CBLReplicator_SetHostReachable, CBLReplicator_SetSuspended,
-    CBLReplicator_Start, CBLReplicator_Status, CBLReplicator_Stop, FLDict, FLSlice, FLSliceResult,
-    FLSliceResult_New, FLSlice_Copy, FLString, FLStringResult, kCBLDocumentFlagsAccessRemoved,
-    kCBLDocumentFlagsDeleted, kCBLProxyHTTP, kCBLProxyHTTPS, kCBLReplicatorBusy,
-    kCBLReplicatorConnecting, kCBLReplicatorIdle, kCBLReplicatorOffline, kCBLReplicatorStopped,
-    kCBLReplicatorTypePull, kCBLReplicatorTypePush, kCBLReplicatorTypePushAndPull,
+    c_api::{
+        CBLAuth_CreatePassword, CBLAuth_CreateSession, CBLAuthenticator, CBLDocument,
+        CBLDocumentFlags, CBLEndpoint, CBLEndpoint_CreateWithLocalDB, CBLEndpoint_CreateWithURL,
+        CBLError, CBLProxySettings, CBLProxyType, CBLReplicatedDocument, CBLReplicator,
+        CBLReplicatorConfiguration, CBLReplicatorStatus, CBLReplicatorType,
+        CBLReplicator_AddChangeListener, CBLReplicator_AddDocumentReplicationListener,
+        CBLReplicator_Config, CBLReplicator_Create, CBLReplicator_IsDocumentPending,
+        CBLReplicator_PendingDocumentIDs, CBLReplicator_SetHostReachable,
+        CBLReplicator_SetSuspended, CBLReplicator_Start, CBLReplicator_Status, CBLReplicator_Stop,
+        FLDict, FLSlice, FLSliceResult, FLSliceResult_New, FLSlice_Copy, FLString, FLStringResult,
+        kCBLDocumentFlagsAccessRemoved, kCBLDocumentFlagsDeleted, kCBLProxyHTTP, kCBLProxyHTTPS,
+        kCBLReplicatorBusy, kCBLReplicatorConnecting, kCBLReplicatorIdle, kCBLReplicatorOffline,
+        kCBLReplicatorStopped, kCBLReplicatorTypePull, kCBLReplicatorTypePush,
+        kCBLReplicatorTypePushAndPull,
+    },
 };
 
 // WARNING: THIS API IS UNIMPLEMENTED SO FAR

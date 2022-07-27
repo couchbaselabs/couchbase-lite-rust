@@ -15,7 +15,7 @@
 // limitations under the License.
 //
 
-use super::c_api::{
+use crate::c_api::{
     CBLLogDomain, CBLLogLevel, CBLLog_SetCallback, CBLLog_SetCallbackLevel, CBLLog_SetConsoleLevel,
     CBL_Log, FLString,
 };
