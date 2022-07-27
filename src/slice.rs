@@ -187,15 +187,15 @@ impl Drop for FLSliceResult {
 //////// C STRINGS
 
 // Convenience to convert a raw `char*` to an unowned `&str`
-pub(crate) unsafe fn to_str<'a>(cstr: *const ::std::os::raw::c_char) -> Cow<'a, str> {
+pub unsafe fn to_str<'a>(cstr: *const ::std::os::raw::c_char) -> Cow<'a, str> {
     CStr::from_ptr(cstr).to_string_lossy()
 }
 
 // Convenience to convert a raw `char*` to an owned String
-pub(crate) unsafe fn to_string(cstr: *const ::std::os::raw::c_char) -> String {
+pub unsafe fn to_string(cstr: *const ::std::os::raw::c_char) -> String {
     to_str(cstr).to_string()
 }
 
-pub(crate) unsafe fn free_cstr(cstr: *const ::std::os::raw::c_char) {
+pub unsafe fn free_cstr(cstr: *const ::std::os::raw::c_char) {
     drop_in_place(cstr as *mut ::std::os::raw::c_char);
 }
