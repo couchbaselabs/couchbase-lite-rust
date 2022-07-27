@@ -37,7 +37,7 @@ pub struct Slice<T> {
 }
 
 impl<T> Slice<T> {
-    pub const fn wrap(slice: FLSlice, _owner: T) -> Self {
+    pub(crate) const fn wrap(slice: FLSlice, _owner: T) -> Self {
         Self {
             _ref: slice,
             _owner,
@@ -90,7 +90,7 @@ pub fn bytes_as_slice(s: &[u8]) -> Slice<&[u8]> {
 
 impl FLSlice {
     // A slice may be null, so in Rust terms it's an Option.
-    pub unsafe fn as_byte_array<'a>(&self) -> Option<&'a [u8]> {
+    pub(crate) unsafe fn as_byte_array<'a>(&self) -> Option<&'a [u8]> {
         if !self {
             return None;
         }
@@ -100,21 +100,22 @@ impl FLSlice {
         ));
     }
 
-    pub unsafe fn as_str<'a>(&self) -> Option<&'a str> {
+    pub(crate) unsafe fn as_str<'a>(&self) -> Option<&'a str> {
         match self.as_byte_array() {
             None => None,
             Some(b) => str::from_utf8(b).ok(),
         }
     }
-    pub unsafe fn to_string(&self) -> Option<String> {
+
+    pub(crate) unsafe fn to_string(&self) -> Option<String> {
         return self.as_str().map(|s| s.to_string());
     }
 
-    pub unsafe fn to_vec(&self) -> Option<Vec<u8>> {
+    pub(crate) unsafe fn to_vec(&self) -> Option<Vec<u8>> {
         return self.as_byte_array().map(|a| a.to_owned());
     }
 
-    pub fn map<F, T>(&self, f: F) -> Option<T>
+    pub(crate) fn map<F, T>(&self, f: F) -> Option<T>
     where
         F: Fn(&FLSlice) -> T,
     {
@@ -178,15 +179,15 @@ impl Drop for FLSliceResult {
 //////// C STRINGS
 
 // Convenience to convert a raw `char*` to an unowned `&str`
-pub unsafe fn to_str<'a>(cstr: *const ::std::os::raw::c_char) -> Cow<'a, str> {
+pub(crate) unsafe fn to_str<'a>(cstr: *const ::std::os::raw::c_char) -> Cow<'a, str> {
     CStr::from_ptr(cstr).to_string_lossy()
 }
 
 // Convenience to convert a raw `char*` to an owned String
-pub unsafe fn to_string(cstr: *const ::std::os::raw::c_char) -> String {
+pub(crate) unsafe fn to_string(cstr: *const ::std::os::raw::c_char) -> String {
     to_str(cstr).to_string()
 }
 
-pub unsafe fn free_cstr(cstr: *const ::std::os::raw::c_char) {
+pub(crate) unsafe fn free_cstr(cstr: *const ::std::os::raw::c_char) {
     drop_in_place(cstr as *mut ::std::os::raw::c_char);
 }
