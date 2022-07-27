@@ -147,7 +147,7 @@ impl Error {
 
     pub(crate) fn fleece_error(e: FLError) -> Self {
         Self {
-            code: ErrorCode::from_fleece(e),
+            code: ErrorCode::from_fleece(e as i32),
             internal_info: None,
         }
     }
@@ -217,18 +217,19 @@ impl ErrorCode {
         match u32::from(err.domain) {
             kCBLDomain => CouchbaseLiteError::from_i32(err.code)
                 .map_or(Self::untranslatable(), Self::CouchbaseLite),
-            kCBLNetworkDomain => NetworkError::from_i32(err.code as i32)
-                .map_or(Self::untranslatable(), Self::Network),
+            kCBLNetworkDomain => {
+                NetworkError::from_i32(err.code).map_or(Self::untranslatable(), Self::Network)
+            }
             kCBLPOSIXDomain => Self::POSIX(err.code),
             kCBLSQLiteDomain => Self::SQLite(err.code),
-            kCBLFleeceDomain => Self::from_fleece(err.code as u32),
+            kCBLFleeceDomain => Self::from_fleece(err.code),
             kCBLWebSocketDomain => Self::WebSocket(err.code),
             _ => Self::untranslatable(),
         }
     }
 
-    fn from_fleece(fleece_error: u32) -> Self {
-        FleeceError::from_u32(fleece_error).map_or(Self::untranslatable(), Self::Fleece)
+    fn from_fleece(fleece_error: i32) -> Self {
+        FleeceError::from_i32(fleece_error).map_or(Self::untranslatable(), Self::Fleece)
     }
 
     const fn untranslatable() -> Self {
@@ -319,11 +320,11 @@ where
     let n = func(&mut error);
     if n < 0 {
         // TODO: Better error mapping!
-        Err(std::io::Error::new(
+        return Err(std::io::Error::new(
             std::io::ErrorKind::NotFound,
             Error::new(&error),
-        ))
-    } else {
-        Ok(n as usize)
+        ));
     }
+    #[allow(clippy::cast_sign_loss)]
+    Ok(n as usize)
 }

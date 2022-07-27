@@ -29,7 +29,6 @@
 #![allow(clippy::cast_possible_wrap)]
 #![allow(clippy::copy_iterator)]
 #![allow(clippy::missing_panics_doc)]
-#![allow(clippy::cast_sign_loss)]
 
 #[macro_use]
 extern crate enum_primitive;
