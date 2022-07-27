@@ -47,34 +47,34 @@ impl Blob {
     //////// CREATION
 
     /** Creates a new blob, given its contents as a byte array. */
-    pub fn new_from_data(data: &[u8], content_type: &str) -> Blob {
+    pub fn new_from_data(data: &[u8], content_type: &str) -> Self {
         unsafe {
             let blob = CBLBlob_CreateWithData(
                 from_str(content_type).get_ref(),
                 from_bytes(data).get_ref(),
             );
-            Blob { cbl_ref: blob }
+            Self { cbl_ref: blob }
         }
     }
 
     /** Creates a new blob from data that has has been written to a [`Writer`].
     You should then add the blob to a document as a property, using [`Slot::put_blob`]. */
-    pub fn new_from_stream(mut stream: BlobWriter, content_type: &str) -> Blob {
+    pub fn new_from_stream(mut stream: BlobWriter, content_type: &str) -> Self {
         unsafe {
             let blob = CBLBlob_CreateWithStream(from_str(content_type).get_ref(), stream.get_ref());
             stream.stream_ref = std::ptr::null_mut(); // stop `drop` from closing the stream
-            Blob { cbl_ref: blob }
+            Self { cbl_ref: blob }
         }
     }
 
     // called by FleeceReference::as_blob()
-    pub(crate) fn from_value<V: FleeceReference>(value: &V) -> Option<Blob> {
+    pub(crate) fn from_value<V: FleeceReference>(value: &V) -> Option<Self> {
         unsafe {
             let blob = FLDict_GetBlob(FLValue_AsDict(value._fleece_ref()));
             if blob.is_null() {
                 None
             } else {
-                Some(Blob { cbl_ref: blob })
+                Some(Self { cbl_ref: blob })
             }
         }
     }
@@ -136,7 +136,7 @@ impl Drop for Blob {
 impl Clone for Blob {
     fn clone(&self) -> Self {
         unsafe {
-            Blob {
+            Self {
                 cbl_ref: retain(self.get_ref() as *mut CBLBlob),
             }
         }

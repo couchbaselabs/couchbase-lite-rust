@@ -54,7 +54,7 @@ impl Query {
     `Query` around instead of compiling it each time. If you need to run related queries
     with only some values different, create one query with placeholder parameter(s), and substitute
     the desired value(s) with `set_parameters` before each time you run the query. */
-    pub fn new(db: &Database, language: QueryLanguage, str: &str) -> Result<Query> {
+    pub fn new(db: &Database, language: QueryLanguage, str: &str) -> Result<Self> {
         unsafe {
             let mut pos: i32 = 0;
             let mut err = CBLError::default();
@@ -70,7 +70,7 @@ impl Query {
                 return failure(err);
             }
 
-            Ok(Query { cbl_ref: q })
+            Ok(Self { cbl_ref: q })
         }
     }
 

@@ -36,6 +36,7 @@ use std::fmt;
 use std::marker::PhantomData;
 use std::ptr;
 
+#[derive(Debug, Clone, Copy)]
 pub enum CopyFlags {
     Default = 0,            // Shallow copy of mutable values
     Deep = 1,               // Deep copy of mutable values
@@ -57,29 +58,29 @@ impl CblRef for MutableArray {
 }
 
 impl MutableArray {
-    pub fn new() -> MutableArray {
+    pub fn new() -> Self {
         unsafe {
-            MutableArray {
+            Self {
                 cbl_ref: FLMutableArray_New(),
             }
         }
     }
 
-    pub fn from_array(array: &Array) -> MutableArray {
-        MutableArray::from_array_(array, CopyFlags::Default)
+    pub fn from_array(array: &Array) -> Self {
+        Self::from_array_(array, CopyFlags::Default)
     }
 
-    pub fn from_array_(array: &Array, flags: CopyFlags) -> MutableArray {
+    pub fn from_array_(array: &Array, flags: CopyFlags) -> Self {
         unsafe {
-            MutableArray {
+            Self {
                 cbl_ref: FLArray_MutableCopy(array.get_ref(), flags as u32),
             }
         }
     }
 
-    pub(crate) unsafe fn adopt(array: FLMutableArray) -> MutableArray {
+    pub(crate) unsafe fn adopt(array: FLMutableArray) -> Self {
         FLValue_Retain(array as FLValue);
-        MutableArray { cbl_ref: array }
+        Self { cbl_ref: array }
     }
 
     pub fn is_changed(&self) -> bool {
@@ -157,7 +158,7 @@ impl FleeceReference for MutableArray {
 impl Clone for MutableArray {
     fn clone(&self) -> Self {
         unsafe {
-            MutableArray {
+            Self {
                 cbl_ref: FLValue_Retain(self.get_ref() as FLValue) as FLMutableArray,
             }
         }
@@ -173,8 +174,8 @@ impl Drop for MutableArray {
 }
 
 impl Default for MutableArray {
-    fn default() -> MutableArray {
-        MutableArray {
+    fn default() -> Self {
+        Self {
             cbl_ref: ptr::null_mut(),
         }
     }
@@ -249,29 +250,29 @@ impl CblRef for MutableDict {
 }
 
 impl MutableDict {
-    pub fn new() -> MutableDict {
+    pub fn new() -> Self {
         unsafe {
-            MutableDict {
+            Self {
                 cbl_ref: FLMutableDict_New(),
             }
         }
     }
 
-    pub fn from_dict(dict: &Dict) -> MutableDict {
-        MutableDict::from_dict_(dict, CopyFlags::Default)
+    pub fn from_dict(dict: &Dict) -> Self {
+        Self::from_dict_(dict, CopyFlags::Default)
     }
 
-    pub fn from_dict_(dict: &Dict, flags: CopyFlags) -> MutableDict {
+    pub fn from_dict_(dict: &Dict, flags: CopyFlags) -> Self {
         unsafe {
-            MutableDict {
+            Self {
                 cbl_ref: FLDict_MutableCopy(dict.get_ref(), flags as u32),
             }
         }
     }
 
-    pub(crate) unsafe fn adopt(dict: FLMutableDict) -> MutableDict {
+    pub(crate) unsafe fn adopt(dict: FLMutableDict) -> Self {
         FLValue_Retain(dict as FLValue);
-        MutableDict { cbl_ref: dict }
+        Self { cbl_ref: dict }
     }
 
     pub fn is_changed(&self) -> bool {
@@ -306,7 +307,7 @@ impl MutableDict {
             .collect::<HashMap<String, String>>()
     }
 
-    pub fn set_encryptable_value(dict: &MutableDict, key: &str, encryptable: &Encryptable) {
+    pub fn set_encryptable_value(dict: &Self, key: &str, encryptable: &Encryptable) {
         unsafe {
             FLSlot_SetEncryptableValue(
                 FLMutableDict_Set(dict.get_ref(), from_str(key).get_ref()),
@@ -315,8 +316,8 @@ impl MutableDict {
         }
     }
 
-    pub fn from_hashmap(map: &HashMap<String, String>) -> MutableDict {
-        let mut dict = MutableDict::new();
+    pub fn from_hashmap(map: &HashMap<String, String>) -> Self {
+        let mut dict = Self::new();
         map.iter()
             .for_each(|(key, value)| dict.at(key.as_str()).put_string(value.as_str()));
         dict
@@ -354,7 +355,7 @@ impl FleeceReference for MutableDict {
 impl Clone for MutableDict {
     fn clone(&self) -> Self {
         unsafe {
-            MutableDict {
+            Self {
                 cbl_ref: FLValue_Retain(self.get_ref() as FLValue) as FLMutableDict,
             }
         }
@@ -370,8 +371,8 @@ impl Drop for MutableDict {
 }
 
 impl Default for MutableDict {
-    fn default() -> MutableDict {
-        MutableDict {
+    fn default() -> Self {
+        Self {
             cbl_ref: ptr::null_mut(),
         }
     }

@@ -31,36 +31,36 @@ impl From<*mut CBLEncryptable> for Encryptable {
 impl Encryptable {
     #[allow(clippy::not_unsafe_ptr_arg_deref)]
     pub fn retain(cbl_ref: *mut CBLEncryptable) -> Self {
-        Encryptable {
+        Self {
             cbl_ref: unsafe { retain(cbl_ref) },
         }
     }
 
-    pub fn create_with_null() -> Encryptable {
+    pub fn create_with_null() -> Self {
         unsafe { CBLEncryptable_CreateWithNull().into() }
     }
 
-    pub fn create_with_bool(value: bool) -> Encryptable {
+    pub fn create_with_bool(value: bool) -> Self {
         unsafe { CBLEncryptable_CreateWithBool(value).into() }
     }
 
-    pub fn create_with_int(value: i64) -> Encryptable {
+    pub fn create_with_int(value: i64) -> Self {
         unsafe { CBLEncryptable_CreateWithInt(value).into() }
     }
 
-    pub fn create_with_uint(value: u64) -> Encryptable {
+    pub fn create_with_uint(value: u64) -> Self {
         unsafe { CBLEncryptable_CreateWithUInt(value).into() }
     }
 
-    pub fn create_with_float(value: f32) -> Encryptable {
+    pub fn create_with_float(value: f32) -> Self {
         unsafe { CBLEncryptable_CreateWithFloat(value).into() }
     }
 
-    pub fn create_with_double(value: f64) -> Encryptable {
+    pub fn create_with_double(value: f64) -> Self {
         unsafe { CBLEncryptable_CreateWithDouble(value).into() }
     }
 
-    pub fn create_with_string(value: &str) -> Encryptable {
+    pub fn create_with_string(value: &str) -> Self {
         unsafe {
             let slice = from_str(value);
             let copy_slice = FLSlice_Copy(slice.get_ref());
@@ -69,15 +69,15 @@ impl Encryptable {
         }
     }
 
-    pub fn create_with_value(value: Value) -> Encryptable {
+    pub fn create_with_value(value: Value) -> Self {
         unsafe { CBLEncryptable_CreateWithValue(value.get_ref()).into() }
     }
 
-    pub fn create_with_array(value: Array) -> Encryptable {
+    pub fn create_with_array(value: Array) -> Self {
         unsafe { CBLEncryptable_CreateWithArray(value.get_ref()).into() }
     }
 
-    pub fn create_with_dict(value: Dict) -> Encryptable {
+    pub fn create_with_dict(value: Dict) -> Self {
         unsafe { CBLEncryptable_CreateWithDict(value.get_ref()).into() }
     }
 
@@ -101,7 +101,7 @@ impl Drop for Encryptable {
 impl Clone for Encryptable {
     fn clone(&self) -> Self {
         unsafe {
-            Encryptable {
+            Self {
                 cbl_ref: retain(self.get_ref().cast::<CBLEncryptable>()),
             }
         }

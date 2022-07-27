@@ -99,14 +99,14 @@ impl CblRef for Database {
 
 impl Database {
     //////// CONSTRUCTORS:
-
-    pub(crate) fn retain(cbl_ref: *mut CBLDatabase) -> Database {
-        Database {
+    pub(crate) fn retain(cbl_ref: *mut CBLDatabase) -> Self {
+        Self {
             cbl_ref: unsafe { retain(cbl_ref) },
         }
     }
-    pub(crate) const fn wrap(cbl_ref: *mut CBLDatabase) -> Database {
-        Database { cbl_ref }
+
+    pub(crate) const fn wrap(cbl_ref: *mut CBLDatabase) -> Self {
+        Self { cbl_ref }
     }
 
     /** Opens a database, or creates it if it doesn't exist yet, returning a new `Database`
@@ -114,7 +114,7 @@ impl Database {
 
     It's OK to open the same database file multiple times. Each `Database` instance is
     independent of the others (and must be separately closed and released.) */
-    pub fn open(name: &str, config: Option<DatabaseConfiguration>) -> Result<Database> {
+    pub fn open(name: &str, config: Option<DatabaseConfiguration>) -> Result<Self> {
         unsafe {
             if let Some(cfg) = config {
                 let mut c_config: CBLDatabaseConfiguration = CBLDatabaseConfiguration_Default();
@@ -122,19 +122,19 @@ impl Database {
                 if let Some(encryption_key) = cfg.encryption_key.as_ref() {
                     c_config.encryptionKey = *encryption_key;
                 }
-                return Database::_open(name, &c_config);
+                return Self::_open(name, &c_config);
             }
-            Database::_open(name, ptr::null())
+            Self::_open(name, ptr::null())
         }
     }
 
-    unsafe fn _open(name: &str, config_ptr: *const CBLDatabaseConfiguration) -> Result<Database> {
+    unsafe fn _open(name: &str, config_ptr: *const CBLDatabaseConfiguration) -> Result<Self> {
         let mut err = CBLError::default();
         let db_ref = CBLDatabase_Open(from_str(name).get_ref(), config_ptr, &mut err);
         if db_ref.is_null() {
             return failure(err);
         }
-        Ok(Database::wrap(db_ref))
+        Ok(Self::wrap(db_ref))
     }
 
     //////// OTHER STATIC METHODS:
@@ -189,7 +189,7 @@ impl Database {
     - Changes will not be visible to other Database instances on the same database until
            the transaction ends.
     - Transactions can nest. Changes are not committed until the outer one ends. */
-    pub fn in_transaction<T>(&mut self, callback: fn(&mut Database) -> Result<T>) -> Result<T> {
+    pub fn in_transaction<T>(&mut self, callback: fn(&mut Self) -> Result<T>) -> Result<T> {
         let mut err = CBLError::default();
         unsafe {
             if !CBLDatabase_BeginTransaction(self.get_ref(), &mut err) {
@@ -272,6 +272,6 @@ impl Drop for Database {
 
 impl Clone for Database {
     fn clone(&self) -> Self {
-        Database::retain(self.get_ref())
+        Self::retain(self.get_ref())
     }
 }

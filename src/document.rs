@@ -272,7 +272,7 @@ impl Database {
 
 impl Default for Document {
     fn default() -> Self {
-        unsafe { Document::wrap(CBLDocument_Create()) }
+        Self::new()
     }
 }
 
@@ -280,20 +280,20 @@ impl Document {
     /** Creates a new, empty document in memory, with an automatically generated unique ID.
     It will not be added to a database until saved. */
     pub fn new() -> Self {
-        Self::default()
+        unsafe { Self::wrap(CBLDocument_Create()) }
     }
 
     /** Creates a new, empty document in memory, with the given ID.
     It will not be added to a database until saved. */
     pub fn new_with_id(id: &str) -> Self {
-        unsafe { Document::wrap(CBLDocument_CreateWithID(from_str(id).get_ref())) }
+        unsafe { Self::wrap(CBLDocument_CreateWithID(from_str(id).get_ref())) }
     }
 
     /** Wrap a CBLDocument as a Document.
     Increment the reference-count for the CBLDocument. */
     pub(crate) fn retain(cbl_ref: *mut CBLDocument) -> Self {
         unsafe {
-            Document {
+            Self {
                 cbl_ref: retain(cbl_ref),
             }
         }
@@ -302,7 +302,7 @@ impl Document {
     /** Wrap a CBLDocument as a Document.
     The CBLDocument reference-count should already have been incremented from a type-safe source. */
     pub(crate) const fn wrap(cbl_ref: *mut CBLDocument) -> Self {
-        Document { cbl_ref }
+        Self { cbl_ref }
     }
 
     /** Returns the document's ID. */
@@ -367,6 +367,6 @@ impl Drop for Document {
 
 impl Clone for Document {
     fn clone(&self) -> Self {
-        Document::retain(self.get_ref())
+        Self::retain(self.get_ref())
     }
 }
