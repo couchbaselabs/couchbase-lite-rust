@@ -89,6 +89,7 @@ impl Drop for Endpoint {
     }
 }
 
+/** An opaque object representing authentication credentials for a remote server. */
 #[derive(Debug, PartialEq, Eq)]
 pub struct Authenticator {
     pub(crate) cbl_ref: *mut CBLAuthenticator,

@@ -29,8 +29,7 @@ impl From<*mut CBLEncryptable> for Encryptable {
 }
 
 impl Encryptable {
-    #[allow(clippy::not_unsafe_ptr_arg_deref)]
-    pub fn retain(cbl_ref: *mut CBLEncryptable) -> Self {
+    pub(crate) fn retain(cbl_ref: *mut CBLEncryptable) -> Self {
         Self {
             cbl_ref: unsafe { retain(cbl_ref) },
         }
