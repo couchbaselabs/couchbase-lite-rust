@@ -81,7 +81,7 @@ pub struct ListenerToken {
 }
 
 impl ListenerToken {
-    pub const fn new(cbl_ref: *mut CBLListenerToken) -> Self {
+    pub(crate) const fn new(cbl_ref: *mut CBLListenerToken) -> Self {
         Self { cbl_ref }
     }
 }
