@@ -149,7 +149,7 @@ fn main() {
     }
 
     if cfg!(target_os = "linux") {
-        let dir = env::var("CARGO_MANIFEST_DIR").unwrap();
+        let dir = env!("CARGO_MANIFEST_DIR");
         println!(
             "cargo:rustc-link-search=all={}",
             std::path::Path::new(&dir)
