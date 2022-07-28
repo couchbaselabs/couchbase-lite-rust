@@ -24,6 +24,7 @@ use crate::{
         CBLQuery_SetParameters, CBLResultSet, CBLResultSet_GetQuery, CBLResultSet_Next,
         CBLResultSet_ResultArray, CBLResultSet_ResultDict, CBLResultSet_ValueAtIndex,
         CBLResultSet_ValueForKey, CBLListenerToken, CBLQuery_AddChangeListener,
+        CBLQuery_CopyCurrentResults,
     },
 };
 
@@ -177,6 +178,16 @@ impl Query {
                 Box::into_raw(callback) as *mut _,
             ))
         }
+    }
+
+    pub fn copy_current_results(&self, listener: &ListenerToken) -> Result<ResultSet> {
+        let mut error = CBLError::default();
+        let result =
+            unsafe { CBLQuery_CopyCurrentResults(self.get_ref(), listener.get_ref(), &mut error) };
+        if result.is_null() {
+            return failure(error);
+        }
+        Ok(ResultSet { cbl_ref: result })
     }
 }
 

@@ -30,7 +30,8 @@ use crate::{
         FLDoc_GetRoot, FLDoc_Release, FLDoc_Retain, FLError, FLError_kFLInvalidData, FLSlice_Copy,
         FLValue, FLValue_AsArray, FLValue_AsBool, FLValue_AsData, FLValue_AsDict, FLValue_AsDouble,
         FLValue_AsFloat, FLValue_AsInt, FLValue_AsString, FLValue_AsTimestamp, FLValue_AsUnsigned,
-        FLValue_GetType, FLValue_IsEqual, FLValue_IsInteger, FLValue_ToJSON, _FLValue,
+        FLValue_GetType, FLValue_IsEqual, FLValue_IsInteger, FLValue_IsUnsigned, FLValue_IsDouble,
+        FLValue_IsMutable, FLValue_ToJSON, _FLValue, FLValue_FindDoc, FLDictIterator_End,
     },
     encryptable::Encryptable,
 };
@@ -41,6 +42,7 @@ use std::fmt;
 use std::mem::MaybeUninit;
 use std::ptr;
 use std::str;
+use retain;
 
 //////// CONTAINER
 
@@ -88,6 +90,10 @@ impl Fleece {
         unsafe { Value::wrap(FLDoc_GetRoot(self.get_ref()), self) }
     }
 
+    pub fn as_shared_key(&self) {
+        todo!("To be implemented when needed")
+    }
+
     pub fn as_array(&self) -> Array {
         self.root().as_array()
     }
@@ -98,6 +104,12 @@ impl Fleece {
 
     pub fn data(&self) -> &[u8] {
         unsafe { FLDoc_GetData(self.get_ref()).as_byte_array().unwrap() }
+    }
+
+    pub fn wrap(doc: FLDoc) -> Self {
+        Self {
+            cbl_ref: unsafe { retain(doc) },
+        }
     }
 }
 
@@ -195,9 +207,23 @@ impl Value {
     pub fn is_number(&self) -> bool {
         self.is_type(ValueType::Number)
     }
+
     pub fn is_integer(&self) -> bool {
         unsafe { FLValue_IsInteger(self.get_ref()) }
     }
+
+    pub fn is_unsigned(&self) -> bool {
+        unsafe { FLValue_IsUnsigned(self.get_ref()) }
+    }
+
+    pub fn is_double(&self) -> bool {
+        unsafe { FLValue_IsDouble(self.get_ref()) }
+    }
+
+    pub fn is_mutable(&self) -> bool {
+        unsafe { FLValue_IsMutable(self.get_ref()) }
+    }
+
     pub fn is_encryptable(&self) -> bool {
         unsafe { FLDict_IsEncryptableValue(FLValue_AsDict(self.get_ref())) }
     }
@@ -293,6 +319,14 @@ impl Value {
             let encryptable = FLDict_GetEncryptableValue(FLValue_AsDict(self.get_ref()));
             Encryptable::retain(encryptable as *mut CBLEncryptable)
         }
+    }
+
+    pub fn find_doc(&self) -> Option<Fleece> {
+        let doc = unsafe { FLValue_FindDoc(self.get_ref()) };
+        if doc.is_null() {
+            return None;
+        }
+        Some(Fleece::wrap(doc))
     }
 }
 
@@ -685,6 +719,12 @@ impl std::iter::FusedIterator for DictIterator {}
 impl ExactSizeIterator for DictIterator {
     fn len(&self) -> usize {
         self.len
+    }
+}
+
+impl Drop for DictIterator {
+    fn drop(&mut self) {
+        unsafe { FLDictIterator_End(&mut self.innards) };
     }
 }
 

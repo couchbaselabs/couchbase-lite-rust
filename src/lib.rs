@@ -40,6 +40,7 @@ pub mod encryptable;
 pub mod error;
 pub mod fleece;
 pub mod fleece_mutable;
+pub mod index;
 pub mod logging;
 pub mod query;
 pub mod replicator;
