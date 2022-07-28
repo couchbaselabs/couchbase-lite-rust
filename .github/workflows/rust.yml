@@ -1,6 +1,10 @@
 name: Rust
 
-on: push
+
+on:
+  push:
+  pull_request:
+    types: [opened, labeled, unlabeled, synchronize]
 
 env:
   CARGO_TERM_COLOR: always
