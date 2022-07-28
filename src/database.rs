@@ -62,8 +62,7 @@ unsafe extern "C" fn c_database_change_listener(
     c_doc_ids: *mut FLString,
 ) {
     let callback: Box<ChangeListener> = Box::from_raw(context as *mut _);
-    // Increment
-    let database = Database::retain(db as *mut CBLDatabase); // +1
+    let database = Database::retain(db as *mut CBLDatabase);
 
     let doc_ids = std::slice::from_raw_parts(c_doc_ids, num_docs as usize)
         .iter()
@@ -71,7 +70,6 @@ unsafe extern "C" fn c_database_change_listener(
         .collect();
 
     callback(&database, doc_ids);
-    // Release
 }
 
 /** Callback indicating that the database (or an object belonging to it) is ready to call one or more listeners. */
