@@ -23,16 +23,33 @@ use crate::{
         CBLQuery_ColumnName, CBLQuery_Execute, CBLQuery_Explain, CBLQuery_Parameters,
         CBLQuery_SetParameters, CBLResultSet, CBLResultSet_GetQuery, CBLResultSet_Next,
         CBLResultSet_ResultArray, CBLResultSet_ResultDict, CBLResultSet_ValueAtIndex,
-        CBLResultSet_ValueForKey,
+        CBLResultSet_ValueForKey, CBLListenerToken, CBLQuery_AddChangeListener,
+        CBLQuery_CopyCurrentResults,
     },
 };
 
 use std::os::raw::c_uint;
+use ListenerToken;
 
 /** Query languages. */
 pub enum QueryLanguage {
     JSON, // JSON query schema: github.com/couchbase/couchbase-lite-core/wiki/JSON-Query-Schema
     N1QL, // N1QL syntax: docs.couchbase.com/server/6.0/n1ql/n1ql-language-reference/index.html
+}
+
+type ChangeListener = Box<dyn Fn(&Query, &ListenerToken)>;
+
+#[no_mangle]
+unsafe extern "C" fn c_query_change_listener(
+    context: *mut ::std::os::raw::c_void,
+    query: *mut CBLQuery,
+    token: *mut CBLListenerToken,
+) {
+    let callback: Box<ChangeListener> = Box::from_raw(context as *mut _);
+    let query = Query::wrap(query as *mut CBLQuery);
+    let token = ListenerToken::new(token);
+
+    callback(&query, &token);
 }
 
 /** A compiled database query. */
@@ -70,6 +87,12 @@ impl Query {
             }
 
             Ok(Self { cbl_ref: q })
+        }
+    }
+
+    pub(crate) fn wrap(cbl_ref: *mut CBLQuery) -> Self {
+        Self {
+            cbl_ref: unsafe { retain(cbl_ref) },
         }
     }
 
@@ -137,6 +160,34 @@ impl Query {
         (0..self.column_count())
             .map(|i| self.column_name(i).unwrap())
             .collect()
+    }
+
+    /** Registers a change listener callback with a query, turning it into a "live query" until
+    the listener is removed (via \ref CBLListener_Remove).
+
+    When the first change listener is added, the query will run (in the background) and notify
+    the listener(s) of the results when ready. After that, it will run in the background after
+    the database changes, and only notify the listeners when the result set changes. */
+    pub fn add_listener(&mut self, listener: ChangeListener) -> ListenerToken {
+        unsafe {
+            let callback: Box<ChangeListener> = Box::new(Box::new(listener));
+
+            ListenerToken::new(CBLQuery_AddChangeListener(
+                self.get_ref(),
+                Some(c_query_change_listener),
+                Box::into_raw(callback) as *mut _,
+            ))
+        }
+    }
+
+    pub fn copy_current_results(&self, listener: &ListenerToken) -> Result<ResultSet> {
+        let mut error = CBLError::default();
+        let result =
+            unsafe { CBLQuery_CopyCurrentResults(self.get_ref(), listener.get_ref(), &mut error) };
+        if result.is_null() {
+            return failure(error);
+        }
+        Ok(ResultSet { cbl_ref: result })
     }
 }
 

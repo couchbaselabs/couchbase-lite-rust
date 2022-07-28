@@ -17,11 +17,12 @@
 
 use crate::{
     CblRef,
-    c_api::{FLSlice, FLSliceResult, _FLBuf_Release, _FLBuf_Retain},
+    c_api::{FLSlice, FLSliceResult, _FLBuf_Release, _FLBuf_Retain, FLData_Dump},
 };
 
 use std::borrow::Cow;
 use std::ffi::{CStr, c_void};
+use std::fmt::{Debug, Formatter};
 use std::ptr::{self, drop_in_place};
 use std::str;
 
@@ -74,6 +75,16 @@ impl<T> Slice<T> {
         F: Fn(&FLSlice) -> FT,
     {
         self.get_ref().map(f)
+    }
+}
+
+impl<T> Debug for Slice<T> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Slice")
+            .field("dump", unsafe {
+                &FLData_Dump(self.get_ref()).to_string().unwrap_or_default()
+            })
+            .finish()
     }
 }
 

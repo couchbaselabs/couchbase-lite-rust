@@ -1,2 +1,3 @@
 leak:libc
+leak:libstdc++
 leak:*generate_replication_configuration*

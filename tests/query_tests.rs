@@ -1,5 +1,7 @@
 extern crate couchbase_lite;
 
+use couchbase_lite::index::ValueIndexConfiguration;
+
 use self::couchbase_lite::*;
 
 pub mod utils;
@@ -58,5 +60,27 @@ fn query() {
             n += 1;
         }
         assert_eq!(n, 2);
+    });
+}
+
+#[test]
+fn indexes() {
+    utils::with_db(|db| {
+        assert!(db
+            .create_index(
+                "new_index",
+                ValueIndexConfiguration::new(QueryLanguage::JSON, r#"[[".id"]]"#),
+            )
+            .unwrap());
+
+        let value = db.get_index_names().iter().next().unwrap();
+        let name = value.as_string().unwrap();
+        assert_eq!(name, "new_index");
+
+        db.delete_index("idx").unwrap();
+        assert_eq!(db.get_index_names().count(), 1);
+
+        db.delete_index("new_index").unwrap();
+        assert_eq!(db.get_index_names().count(), 0);
     });
 }

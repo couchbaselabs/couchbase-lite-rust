@@ -40,6 +40,7 @@ pub mod encryptable;
 pub mod error;
 pub mod fleece;
 pub mod fleece_mutable;
+pub mod index;
 pub mod logging;
 pub mod query;
 pub mod replicator;
@@ -81,7 +82,7 @@ pub struct ListenerToken {
 }
 
 impl ListenerToken {
-    pub const fn new(cbl_ref: *mut CBLListenerToken) -> Self {
+    pub(crate) const fn new(cbl_ref: *mut CBLListenerToken) -> Self {
         Self { cbl_ref }
     }
 }
