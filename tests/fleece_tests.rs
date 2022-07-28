@@ -83,25 +83,26 @@ fn basic_values() {
 #[test]
 fn nested_borrow_check() {
     let v: Value;
-    let str: &str;
+    let mut str = String::new();
 
     let doc = Fleece::parse_json(r#"{"i":1234,"f":12.34,"a":[1, 2],"s":"Foo"}"#).unwrap();
     {
         let dict = doc.as_dict();
+        str.push_str(dict.get("s").as_string().unwrap());
         v = dict.get("a");
-        str = dict.get("s").as_string().unwrap();
     }
     // It's OK that `dict` has gone out of scope, because `v`s scope is `doc`, not `dict`.
     println!("v = {:?}", v);
     println!("str = {}", str);
 }
 
+/*
 // This test doesn't and shouldn't compile -- it tests that the borrow-checker will correctly
 // prevent Fleece data from being used after its document has been freed.
 #[test]
 fn borrow_check() {
-    let v: Value;
-    let str: &str;
+    let v : Value;
+    let str : &str;
     {
         let doc = Fleece::parse_json(r#"{"i":1234,"f":12.34,"a":[1, 2],"s":"Foo"}"#).unwrap();
         let dict = doc.as_dict();
@@ -111,6 +112,7 @@ fn borrow_check() {
     println!("v = {:?}", v);
     println!("str = {}", str);
 }
+*/
 
 #[test]
 fn dict_to_hash_set() {

@@ -27,14 +27,14 @@ use std::fmt;
 //////// ERROR STRUCT:
 
 /** Error type. Wraps multiple types of errors in an enum. */
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub struct Error {
     pub code: ErrorCode,
     pub(crate) internal_info: Option<u32>,
 }
 
 /** The enum that stores the error domain and code for an Error. */
-#[derive(Debug, PartialEq, Copy, Clone)]
+#[derive(Debug, PartialEq, Eq, Copy, Clone)]
 pub enum ErrorCode {
     CouchbaseLite(CouchbaseLiteError),
     POSIX(i32),
@@ -49,7 +49,7 @@ pub type Result<T> = std::result::Result<T, Error>;
 
 enum_from_primitive! {
     /** Couchbase Lite error codes. */
-    #[derive(Debug, Copy, Clone, PartialEq)]
+    #[derive(Debug, Copy, Clone, PartialEq, Eq)]
     pub enum CouchbaseLiteError {
         AssertionFailed = 1,    // Internal assertion failure
         Unimplemented,          // Oops, an unimplemented API call
@@ -88,7 +88,7 @@ enum_from_primitive! {
 
 enum_from_primitive! {
     /** Fleece error codes. */
-    #[derive(Debug, Copy, Clone, PartialEq)]
+    #[derive(Debug, Copy, Clone, PartialEq, Eq)]
     pub enum FleeceError {
         MemoryError = 1,    // Out of memory, or allocation failed
         OutOfRange,         // Array index or iterator out of range
@@ -106,7 +106,7 @@ enum_from_primitive! {
 
 enum_from_primitive! {
     /** Network error codes defined by Couchbase Lite. */
-    #[derive(Debug, Copy, Clone, PartialEq)]
+    #[derive(Debug, Copy, Clone, PartialEq, Eq)]
     pub enum NetworkError {
         DNSFailure = 1,            // DNS lookup failed
         UnknownHost,               // DNS server doesn't know the hostname

@@ -14,7 +14,7 @@ use std::{
 // Enables check for leaks of native CBL objects after `with_db()` finishes.
 // WARNING: These checks only work if one test method runs at a time, i.e. testing is single
 //          threaded. Run as `cargo test -- --test-threads=1` or you'll get false positives.
-const LEAK_CHECKS: bool = true;
+const LEAK_CHECK: Option<&'static str> = option_env!("LEAK_CHECK");
 
 pub const DB_NAME: &str = "test_db";
 
@@ -55,10 +55,13 @@ where
     f(&mut db);
 
     db.delete().unwrap();
-    if LEAK_CHECKS && instance_count() as isize > start_inst_count {
+
+    if LEAK_CHECK.is_some() {
         warn!("Couchbase Lite objects were leaked by this test");
         dump_instances();
-        panic!(
+        assert_eq!(
+            instance_count() as usize,
+            start_inst_count as usize,
             "Native object leak: {} objects, was {}",
             instance_count(),
             start_inst_count
@@ -71,17 +74,18 @@ where
 
 // Replication
 
-pub struct ReplicationTestConfiguration<'a> {
+pub struct ReplicationTestConfiguration {
     pub replicator_type: ReplicatorType,
     pub continuous: bool,
-    pub document_ids: Array<'a>,
+    pub document_ids: Array,
     pub push_filter: Option<ReplicationFilter>,
     pub pull_filter: Option<ReplicationFilter>,
     pub conflict_resolver: Option<ConflictResolver>,
     pub property_encryptor: Option<PropertyEncryptor>,
     pub property_decryptor: Option<PropertyDecryptor>,
 }
-impl<'a> Default for ReplicationTestConfiguration<'a> {
+
+impl Default for ReplicationTestConfiguration {
     fn default() -> Self {
         Self {
             replicator_type: ReplicatorType::PushAndPull,
@@ -96,11 +100,11 @@ impl<'a> Default for ReplicationTestConfiguration<'a> {
     }
 }
 
-fn generate_replication_configuration<'a>(
+fn generate_replication_configuration(
     local_db: &Database,
     central_db: &Database,
-    config: ReplicationTestConfiguration<'a>,
-) -> ReplicatorConfiguration<'a> {
+    config: ReplicationTestConfiguration,
+) -> ReplicatorConfiguration {
     ReplicatorConfiguration {
         database: local_db.clone(),
         endpoint: Endpoint::new_with_local_db(central_db),

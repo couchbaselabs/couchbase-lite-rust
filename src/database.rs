@@ -41,8 +41,7 @@ pub struct DatabaseConfiguration<'a> {
 }
 
 enum_from_primitive! {
-    /** Conflict-handling options when saving or deleting a document. */
-    #[derive(Debug, Clone, Copy, PartialEq)]
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
     pub enum MaintenanceType {
         Compact         = kCBLMaintenanceTypeCompact as isize,
         Reindex         = kCBLMaintenanceTypeReindex as isize,
@@ -53,7 +52,8 @@ enum_from_primitive! {
 }
 
 /** A database change listener callback, invoked after one or more documents are changed on disk. */
-type ChangeListener = fn(db: &Database, doc_ids: Vec<String>);
+type ChangeListener = Box<dyn Fn(&Database, Vec<String>)>;
+
 #[no_mangle]
 unsafe extern "C" fn c_database_change_listener(
     context: *mut ::std::os::raw::c_void,
@@ -61,8 +61,7 @@ unsafe extern "C" fn c_database_change_listener(
     num_docs: ::std::os::raw::c_uint,
     c_doc_ids: *mut FLString,
 ) {
-    let callback: ChangeListener = std::mem::transmute(context);
-
+    let callback: Box<ChangeListener> = Box::from_raw(context as *mut _);
     let database = Database::retain(db as *mut CBLDatabase);
 
     let doc_ids = std::slice::from_raw_parts(c_doc_ids, num_docs as usize)
@@ -235,13 +234,15 @@ impl Database {
     if you want the callback to keep working. */
     pub fn add_listener(&mut self, listener: ChangeListener) -> ListenerToken {
         unsafe {
-            let callback = listener as *mut std::ffi::c_void;
+            let callback: Box<ChangeListener> = Box::new(Box::new(listener));
 
-            ListenerToken::new(CBLDatabase_AddChangeListener(
-                self.get_ref(),
-                Some(c_database_change_listener),
-                callback,
-            ))
+            ListenerToken {
+                cbl_ref: CBLDatabase_AddChangeListener(
+                    self.cbl_ref,
+                    Some(c_database_change_listener),
+                    Box::into_raw(callback) as *mut _,
+                ),
+            }
         }
     }
 

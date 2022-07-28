@@ -3,11 +3,9 @@ extern crate couchbase_lite;
 extern crate lazy_static;
 
 use self::couchbase_lite::*;
-use lazy_static::lazy_static;
+use std::time::Duration;
 
 pub mod utils;
-
-use std::sync::{Arc, Mutex};
 
 #[test]
 fn document_new() {
@@ -179,61 +177,6 @@ fn database_save_document_resolving() {
     });
 }
 
-lazy_static! {
-    static ref DOCUMENT_DETECTED: Arc<Mutex<bool>> = Arc::new(Mutex::new(false));
-}
-
-#[test]
-fn database_delete_document() {
-    utils::set_static(&DOCUMENT_DETECTED, false);
-
-    let config1 = utils::ReplicationTestConfiguration {
-        push_filter: Some(|document, is_deleted, _is_access_removed| {
-            if is_deleted && document.id() == "foo" {
-                utils::set_static(&DOCUMENT_DETECTED, true);
-            }
-            true
-        }),
-        ..Default::default()
-    };
-    let config2: utils::ReplicationTestConfiguration = Default::default();
-
-    utils::with_three_dbs(
-        config1,
-        config2,
-        |local_db1, local_db2, central_db, _repl1, _repl2| {
-            // Save doc 'foo'
-            utils::add_doc(local_db1, "foo", 1234, "Hello World!");
-
-            // Check 'foo' is replicated to central and DB 2
-            assert!(utils::check_callback_with_wait(
-                || central_db.get_document("foo").is_ok(),
-                None
-            ));
-            assert!(utils::check_callback_with_wait(
-                || local_db2.get_document("foo").is_ok(),
-                None
-            ));
-
-            // Delete document in DB 1
-            let document = local_db1.get_document("foo").unwrap();
-            local_db1
-                .delete_document_with_concurency_control(
-                    &document,
-                    ConcurrencyControl::FailOnConflict,
-                )
-                .expect("delete_document");
-
-            // Check document is replicated with deleted flag
-            assert!(utils::check_static_with_wait(
-                &DOCUMENT_DETECTED,
-                true,
-                None
-            ));
-        },
-    );
-}
-
 #[test]
 fn database_purge_document() {
     utils::with_db(|db| {
@@ -279,36 +222,77 @@ fn database_document_expiration() {
 
 #[test]
 fn database_add_document_change_listener() {
-    utils::set_static(&DOCUMENT_DETECTED, false);
-
     utils::with_db(|db| {
+        let (sender, receiver) = std::sync::mpsc::channel();
         let mut document = Document::new_with_id("foo");
         db.save_document_with_concurency_control(&mut document, ConcurrencyControl::FailOnConflict)
             .expect("save_document");
-        let listener_token = db.add_document_change_listener(&document, |_, document_id| {
-            if let Some(id) = document_id {
-                assert_eq!(id, "foo");
-                utils::set_static(&DOCUMENT_DETECTED, true);
-            }
-        });
+        let listener_token = db.add_document_change_listener(
+            &document,
+            Box::new(move |_, document_id| {
+                if let Some(id) = document_id {
+                    assert_eq!(id, "foo");
+                    sender.send(true).unwrap();
+                }
+            }),
+        );
         document.mutable_properties().at("foo").put_i64(1);
         db.save_document_with_concurency_control(&mut document, ConcurrencyControl::FailOnConflict)
             .expect("save_document");
-        assert!(utils::check_static_with_wait(
-            &DOCUMENT_DETECTED,
-            true,
-            None
-        ));
 
-        utils::set_static(&DOCUMENT_DETECTED, false);
+        receiver.recv_timeout(Duration::from_secs(1)).unwrap();
+
         let mut document = Document::new_with_id("bar");
         db.save_document_with_concurency_control(&mut document, ConcurrencyControl::FailOnConflict)
             .expect("save_document");
-        assert!(utils::check_static_with_wait(
-            &DOCUMENT_DETECTED,
-            false,
-            None
-        ));
+        assert!(receiver.recv_timeout(Duration::from_secs(10)).is_err());
         drop(listener_token);
     });
+}
+
+#[test]
+fn database_delete_document() {
+    let (sender, receiver) = std::sync::mpsc::channel();
+
+    let config1 = utils::ReplicationTestConfiguration {
+        push_filter: Some(Box::new(move |document, is_deleted, _is_access_removed| {
+            if is_deleted && document.id() == "foo" {
+                sender.send(true).unwrap();
+            }
+            true
+        })),
+        ..Default::default()
+    };
+    let config2: utils::ReplicationTestConfiguration = Default::default();
+
+    utils::with_three_dbs(
+        config1,
+        config2,
+        |local_db1, local_db2, central_db, _repl1, _repl2| {
+            // Save doc 'foo'
+            utils::add_doc(local_db1, "foo", 1234, "Hello World!");
+
+            // Check 'foo' is replicated to central and DB 2
+            assert!(utils::check_callback_with_wait(
+                || central_db.get_document("foo").is_ok(),
+                None
+            ));
+            assert!(utils::check_callback_with_wait(
+                || local_db2.get_document("foo").is_ok(),
+                None
+            ));
+
+            // Delete document in DB 1
+            let document = local_db1.get_document("foo").unwrap();
+            local_db1
+                .delete_document_with_concurency_control(
+                    &document,
+                    ConcurrencyControl::FailOnConflict,
+                )
+                .expect("delete_document");
+
+            // Check document is replicated with deleted flag
+            receiver.recv_timeout(Duration::from_secs(1)).unwrap();
+        },
+    );
 }

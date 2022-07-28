@@ -133,7 +133,7 @@ impl MutableArray {
 // "Inherited" API:
 impl MutableArray {
     pub fn as_array(&self) -> Array {
-        Array::wrap(self.get_ref(), self)
+        Array::wrap(self.get_ref())
     }
     pub fn count(&self) -> u32 {
         self.as_array().count()
@@ -206,20 +206,20 @@ impl fmt::Debug for MutableArray {
 
 impl fmt::Display for MutableArray {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        return f.write_str(&self.as_value().to_json());
+        f.write_str(&self.as_value().to_json())
     }
 }
 
-impl<'a> IntoIterator for &'a MutableArray {
-    type Item = Value<'a>;
-    type IntoIter = ArrayIterator<'a>;
+impl IntoIterator for MutableArray {
+    type Item = Value;
+    type IntoIter = ArrayIterator;
     fn into_iter(self) -> Self::IntoIter {
         self.iter()
     }
 }
 
 // Mutable API additions for Array:
-impl<'d> Array<'d> {
+impl Array {
     pub fn as_mutable(self) -> Option<MutableArray> {
         unsafe {
             let md = FLArray_AsMutable(self.get_ref());
@@ -297,7 +297,7 @@ impl MutableDict {
     }
 
     pub fn to_hashmap(&self) -> HashMap<String, String> {
-        self.into_iter()
+        self.iter()
             .map(|tuple| {
                 (
                     tuple.0.to_string(),
@@ -407,16 +407,16 @@ impl fmt::Display for MutableDict {
     }
 }
 
-impl<'a> IntoIterator for &'a MutableDict {
-    type Item = (&'a str, Value<'a>);
-    type IntoIter = DictIterator<'a>;
+impl IntoIterator for MutableDict {
+    type Item = (String, Value);
+    type IntoIter = DictIterator;
     fn into_iter(self) -> Self::IntoIter {
         self.iter()
     }
 }
 
 // Mutable API for Dict:
-impl<'d> Dict<'d> {
+impl Dict {
     pub fn as_mutable(self) -> Option<MutableDict> {
         unsafe {
             let md = FLDict_AsMutable(self.get_ref());

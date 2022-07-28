@@ -23,16 +23,17 @@ use lazy_static::lazy_static;
 
 pub mod utils;
 
-use std::sync::{Arc, Mutex};
+use std::{
+    sync::{Arc, Mutex},
+    time::Duration,
+};
 
 //////// TESTS:
 
-#[test]
-fn db_properties() {
-    utils::with_db(|db| {
-        assert_eq!(db.name(), utils::DB_NAME);
-        assert_eq!(db.count(), 0);
-    });
+// Only for buffer_notifications test
+lazy_static! {
+    static ref BUFFER_NOTIFICATIONS: Arc<Mutex<bool>> = Arc::new(Mutex::new(false));
+    static ref DOCUMENT_DETECTED: Arc<Mutex<bool>> = Arc::new(Mutex::new(false));
 }
 
 #[test]
@@ -62,31 +63,29 @@ fn in_transaction() {
     });
 }
 
-lazy_static! {
-    static ref BUFFER_NOTIFICATIONS: Arc<Mutex<bool>> = Arc::new(Mutex::new(false));
-    static ref DOCUMENT_DETECTED: Arc<Mutex<bool>> = Arc::new(Mutex::new(false));
+#[test]
+fn db_properties() {
+    utils::with_db(|db| {
+        assert_eq!(db.name(), utils::DB_NAME);
+        assert_eq!(db.count(), 0);
+    });
 }
 
 #[test]
 fn add_listener() {
-    utils::set_static(&DOCUMENT_DETECTED, false);
-
     utils::with_db(|db| {
-        let listener_token = db.add_listener(|_, doc_ids| {
+        let (sender, receiver) = std::sync::mpsc::channel();
+        let listener_token = db.add_listener(Box::new(move |_, doc_ids| {
             if doc_ids.first().unwrap() == "document" {
-                utils::set_static(&DOCUMENT_DETECTED, true);
+                sender.send(true).unwrap();
             }
-        });
+        }));
 
         let mut doc = Document::new_with_id("document");
         db.save_document_with_concurency_control(&mut doc, ConcurrencyControl::LastWriteWins)
             .unwrap();
 
-        assert!(utils::check_static_with_wait(
-            &DOCUMENT_DETECTED,
-            true,
-            None
-        ));
+        receiver.recv_timeout(Duration::from_secs(1)).unwrap();
 
         drop(listener_token);
     });
@@ -102,11 +101,11 @@ fn buffer_notifications() {
             utils::set_static(&BUFFER_NOTIFICATIONS, true);
         });
 
-        let listener_token = db.add_listener(|_, doc_ids| {
+        let listener_token = db.add_listener(Box::new(move |_, doc_ids| {
             if doc_ids.first().unwrap() == "document" {
                 utils::set_static(&DOCUMENT_DETECTED, true);
             }
-        });
+        }));
 
         let mut doc = Document::new_with_id("document");
         db.save_document_with_concurency_control(&mut doc, ConcurrencyControl::LastWriteWins)
