@@ -661,18 +661,18 @@ impl From<CBLReplicatorStatus> for ReplicatorStatus {
 }
 
 /** A callback that notifies you when the replicator's status changes. */
-pub type ReplicatorChangeListener = fn(&Replicator, ReplicatorStatus);
+pub type ReplicatorChangeListener = Box<dyn FnMut(&Replicator, ReplicatorStatus)>;
 #[no_mangle]
 unsafe extern "C" fn c_replicator_change_listener(
     context: *mut ::std::os::raw::c_void,
     replicator: *mut CBLReplicator,
     status: *const CBLReplicatorStatus,
 ) {
-    let callback: ReplicatorChangeListener = std::mem::transmute(context);
+    let mut callback: Box<ReplicatorChangeListener> = Box::from_raw(context as *mut _);
 
     let replicator = Replicator {
         cbl_ref: retain(replicator),
-        context: Box::from_raw(std::mem::transmute(&context)),
+        context: Box::from_raw(context as *mut _),
     };
     let status: ReplicatorStatus = (*status).into();
 
@@ -778,11 +778,11 @@ impl Replicator {
     /** Adds a listener that will be called when the replicator's status changes. */
     pub fn add_change_listener(&mut self, listener: ReplicatorChangeListener) -> ListenerToken {
         unsafe {
-            let callback = listener as *mut std::ffi::c_void;
+            let callback = Box::new(Box::new(listener));
             ListenerToken::new(CBLReplicator_AddChangeListener(
                 self.get_ref(),
                 Some(c_replicator_change_listener),
-                callback,
+                Box::into_raw(callback) as *mut _,
             ))
         }
     }
