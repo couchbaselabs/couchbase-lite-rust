@@ -64,6 +64,16 @@ pub use fleece_mutable::*;
 pub use query::*;
 pub use replicator::*;
 
+pub fn lib_path() -> String {
+    let dir = env!("CARGO_MANIFEST_DIR");
+
+    std::path::Path::new(&dir)
+        .join("libcblite-3.0.1/lib")
+        .to_str()
+        .unwrap_or_default()
+        .to_string()
+}
+
 //////// TOP-LEVEL TYPES:
 
 pub trait CblRef {
