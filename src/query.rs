@@ -223,15 +223,17 @@ impl CblRef for ResultSet {
     }
 }
 
-impl<'r> Iterator for &'r ResultSet {
-    type Item = Row<'r>;
+impl Iterator for ResultSet {
+    type Item = Row;
 
-    fn next(&mut self) -> Option<Row<'r>> {
+    fn next(&mut self) -> Option<Row> {
         unsafe {
             if !CBLResultSet_Next(self.get_ref()) {
                 return None;
             }
-            Some(Row { results: self })
+            Some(Row {
+                cbl_ref: self.get_ref(),
+            })
         }
     }
 }
@@ -247,16 +249,16 @@ impl Drop for ResultSet {
 //////// ROW:
 
 /** A single result row from a Query. */
-pub struct Row<'r> {
-    results: &'r ResultSet,
+pub struct Row {
+    cbl_ref: *mut CBLResultSet,
 }
 
-impl<'r> Row<'r> {
+impl Row {
     /** Returns the value of a column, given its (zero-based) index. */
     pub fn get(&self, index: isize) -> Value {
         unsafe {
             Value {
-                cbl_ref: CBLResultSet_ValueAtIndex(self.results.get_ref(), index as c_uint),
+                cbl_ref: CBLResultSet_ValueAtIndex(self.cbl_ref, index as c_uint),
             }
         }
     }
@@ -265,7 +267,7 @@ impl<'r> Row<'r> {
     pub fn get_key(&self, key: &str) -> Value {
         unsafe {
             Value {
-                cbl_ref: CBLResultSet_ValueForKey(self.results.get_ref(), from_str(key).get_ref()),
+                cbl_ref: CBLResultSet_ValueForKey(self.cbl_ref, from_str(key).get_ref()),
             }
         }
     }
@@ -273,7 +275,7 @@ impl<'r> Row<'r> {
     /** Returns the number of columns. (This is the same as `Query`::column_count.) */
     pub fn column_count(&self) -> isize {
         unsafe {
-            let query = CBLResultSet_GetQuery(self.results.get_ref());
+            let query = CBLResultSet_GetQuery(self.cbl_ref);
             CBLQuery_ColumnCount(query) as isize
         }
     }
@@ -281,7 +283,7 @@ impl<'r> Row<'r> {
     /** Returns the name of a column. */
     pub fn column_name(&self, col: isize) -> Option<&str> {
         unsafe {
-            let query = CBLResultSet_GetQuery(self.results.get_ref());
+            let query = CBLResultSet_GetQuery(self.cbl_ref);
             CBLQuery_ColumnName(query, col as c_uint).as_str()
         }
     }
@@ -290,7 +292,7 @@ impl<'r> Row<'r> {
     pub fn as_array(&self) -> Array {
         unsafe {
             Array {
-                cbl_ref: CBLResultSet_ResultArray(self.results.get_ref()),
+                cbl_ref: CBLResultSet_ResultArray(self.cbl_ref),
             }
         }
     }
@@ -299,7 +301,7 @@ impl<'r> Row<'r> {
     pub fn as_dict(&self) -> Dict {
         unsafe {
             Dict {
-                cbl_ref: CBLResultSet_ResultDict(self.results.get_ref()),
+                cbl_ref: CBLResultSet_ResultDict(self.cbl_ref),
             }
         }
     }
