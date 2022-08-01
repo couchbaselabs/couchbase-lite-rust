@@ -24,26 +24,26 @@ fn query() {
         assert_eq!(query.column_name(1), Some("s"));
 
         // Step through the iterator manually:
-        let results = query.execute().expect("execute");
-        let mut row = (&results).next().unwrap(); //FIXME: Do something about the (&results). requirement
+        let mut results = query.execute().expect("execute");
+        let mut row = results.next().unwrap(); //FIXME: Do something about the (&results). requirement
         let mut i = row.get(0);
         let mut s = row.get(1);
         assert_eq!(i.as_i64().unwrap(), 2);
         assert_eq!(s.as_string().unwrap(), "two");
         assert_eq!(row.as_dict().to_json(), r#"{"i":2,"s":"two"}"#);
 
-        row = (&results).next().unwrap();
+        row = results.next().unwrap();
         i = row.get(0);
         s = row.get(1);
         assert_eq!(i.as_i64().unwrap(), 3);
         assert_eq!(s.as_string().unwrap(), "three");
         assert_eq!(row.as_dict().to_json(), r#"{"i":3,"s":"three"}"#);
 
-        assert!((&results).next().is_none());
+        assert!(results.next().is_none());
 
         // Now try a for...in loop:
         let mut n = 0;
-        for row in &query.execute().expect("execute") {
+        for row in query.execute().expect("execute") {
             match n {
                 0 => {
                     assert_eq!(row.as_array().to_json(), r#"[2,"two"]"#);
