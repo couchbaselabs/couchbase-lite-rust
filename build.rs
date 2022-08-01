@@ -173,7 +173,8 @@ fn main() -> Result<(), Box<dyn Error>> {
 
         let lib_path = Path::new("libcblite-3.0.1/lib/");
         let dest_path = PathBuf::from(format!("target/{}/deps/", build_type));
-        panic!("lib: {:?}  dest: {:?}", lib_path, dest_path);
+        
+        panic!("curr: {:?}  lib: {:?}  dest: {:?}", std::env::current_dir(), lib_path, dest_path);
         std::fs::copy(
             lib_path.join("libcblite.so"),
             dest_path.join("libcblite.so"),
