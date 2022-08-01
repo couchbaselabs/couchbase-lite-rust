@@ -64,6 +64,8 @@ pub use fleece_mutable::*;
 pub use query::*;
 pub use replicator::*;
 
+use std::path::PathBuf;
+
 pub fn lib_path() -> String {
     let dir = env!("CARGO_MANIFEST_DIR");
 
@@ -72,6 +74,105 @@ pub fn lib_path() -> String {
         .to_str()
         .unwrap_or_default()
         .to_string()
+}
+
+pub fn setup() {
+    let lib_path = PathBuf::from(format!(
+        "{}/libcblite-3.0.1/lib/",
+        env!("CARGO_MANIFEST_DIR")
+    ));
+
+    let build_type = if cfg!(debug_assertions) {
+        "debug"
+    } else {
+        "release"
+    };
+    let dest_path = PathBuf::from(format!(
+        "{}/target/{}/deps/",
+        std::env::var("CARGO_MANIFEST_DIR").unwrap(),
+        build_type
+    ));
+
+    std::fs::copy(
+        lib_path.join("libcblite.so"),
+        dest_path.join("libcblite.so"),
+    )
+    .unwrap();
+    std::fs::copy(
+        lib_path.join("libcblite.so.3"),
+        dest_path.join("libcblite.so.3"),
+    )
+    .unwrap();
+    std::fs::copy(
+        lib_path.join("libcblite.so.3.0.1"),
+        dest_path.join("libcblite.so.3.0.1"),
+    )
+    .unwrap();
+    std::fs::copy(
+        lib_path.join("libcblite.so.sym"),
+        dest_path.join("libcblite.so.sym"),
+    )
+    .unwrap();
+    std::fs::copy(
+        lib_path.join("libicudata.so.63"),
+        dest_path.join("libicudata.so.63"),
+    )
+    .unwrap();
+    std::fs::copy(
+        lib_path.join("libicudata.so.63.1"),
+        dest_path.join("libicudata.so.63.1"),
+    )
+    .unwrap();
+    std::fs::copy(
+        lib_path.join("libicui18n.so.63"),
+        dest_path.join("libicui18n.so.63"),
+    )
+    .unwrap();
+    std::fs::copy(
+        lib_path.join("libicui18n.so.63.1"),
+        dest_path.join("libicui18n.so.63.1"),
+    )
+    .unwrap();
+    std::fs::copy(
+        lib_path.join("libicuio.so.63"),
+        dest_path.join("libicuio.so.63"),
+    )
+    .unwrap();
+    std::fs::copy(
+        lib_path.join("libicuio.so.63.1"),
+        dest_path.join("libicuio.so.63.1"),
+    )
+    .unwrap();
+    std::fs::copy(
+        lib_path.join("libicutest.so.63"),
+        dest_path.join("libicutest.so.63"),
+    )
+    .unwrap();
+    std::fs::copy(
+        lib_path.join("libicutest.so.63.1"),
+        dest_path.join("libicutest.so.63.1"),
+    )
+    .unwrap();
+    std::fs::copy(
+        lib_path.join("libicutu.so.63"),
+        dest_path.join("libicutu.so.63"),
+    )
+    .unwrap();
+    std::fs::copy(
+        lib_path.join("libicutu.so.63.1"),
+        dest_path.join("libicutu.so.63.1"),
+    )
+    .unwrap();
+    std::fs::copy(
+        lib_path.join("libicuuc.so.63"),
+        dest_path.join("libicuuc.so.63"),
+    )
+    .unwrap();
+    std::fs::copy(
+        lib_path.join("libicuuc.so.63.1"),
+        dest_path.join("libicuuc.so.63.1"),
+    )
+    .unwrap();
 }
 
 //////// TOP-LEVEL TYPES:

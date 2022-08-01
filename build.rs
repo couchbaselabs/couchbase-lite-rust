@@ -24,10 +24,9 @@
 
 extern crate bindgen;
 
-use std::error::Error;
 use std::env;
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 // Where to find the Couchbase Lite headers and library:    //TODO: Make this easily configurable
 static CBL_INCLUDE_DIR: &str = "libcblite-3.0.1/include";
@@ -49,7 +48,7 @@ static DEFAULT_LIBCLANG_PATH: &str = "/usr/lib/";
 static STATIC_LINK_CBL: bool = false;
 static CBL_SRC_DIR: &str = "../../CBL_C";
 
-fn main() -> Result<(), Box<dyn Error>> {
+fn main() {
     // Set LIBCLANG_PATH environment variable if it's not already set:
     if env::var("LIBCLANG_PATH").is_err() {
         env::set_var("LIBCLANG_PATH", DEFAULT_LIBCLANG_PATH);
@@ -149,107 +148,6 @@ fn main() -> Result<(), Box<dyn Error>> {
         println!("cargo:rustc-link-lib=dylib=cblite");
     }
 
-    if cfg!(target_os = "linux") {
-        let dir = env!("CARGO_MANIFEST_DIR");
-        println!(
-            "cargo:rustc-link-search=all={}",
-            std::path::Path::new(&dir)
-                .join("libcblite-3.0.1/lib")
-                .display()
-        );
-
-        println!(
-            "cargo:rustc-env=LD_LIBRARY_PATH={}",
-            std::path::Path::new(&dir)
-                .join("libcblite-3.0.1/lib")
-                .display()
-        );
-
-        let build_type = if cfg!(debug_assertions) {
-            "debug"
-        } else {
-            "release"
-        };
-
-        let lib_path = Path::new("libcblite-3.0.1/lib/");
-        let dest_path = PathBuf::from(format!("{}/{}/deps/", /*env!("CARGO_TARGET_DIR")*/ "", build_type));
-
-        let env_vars = env::vars();
-        let mut out = String::new();
-        for(key, value) in env_vars.into_iter() {
-            out.push_str(&format!("{} = {:?}\n", key, value));
-        }
-        panic!("{}\n{}\n{:?}", out, dir, std::env::var("CARGO_MANIFEST_DIR"));
-        
-        //panic!("curr: {:?} out: {:?} lib: {:?}  dest: {:?}", std::env::current_dir(), std::env::var("OUT_DIR"), lib_path, dest_path);
-        std::fs::copy(
-            lib_path.join("libcblite.so"),
-            dest_path.join("libcblite.so"),
-        )?;
-        std::fs::copy(
-            lib_path.join("libcblite.so.3"),
-            dest_path.join("libcblite.so.3"),
-        )?;
-        std::fs::copy(
-            lib_path.join("libcblite.so.3.0.1"),
-            dest_path.join("libcblite.so.3.0.1"),
-        )?;
-        std::fs::copy(
-            lib_path.join("libcblite.so.sym"),
-            dest_path.join("libcblite.so.sym"),
-        )?;
-        std::fs::copy(
-            lib_path.join("libicudata.so.63"),
-            dest_path.join("libicudata.so.63"),
-        )?;
-        std::fs::copy(
-            lib_path.join("libicudata.so.63.1"),
-            dest_path.join("libicudata.so.63.1"),
-        )?;
-        std::fs::copy(
-            lib_path.join("libicui18n.so.63"),
-            dest_path.join("libicui18n.so.63"),
-        )?;
-        std::fs::copy(
-            lib_path.join("libicui18n.so.63.1"),
-            dest_path.join("libicui18n.so.63.1"),
-        )?;
-        std::fs::copy(
-            lib_path.join("libicuio.so.63"),
-            dest_path.join("libicuio.so.63"),
-        )?;
-        std::fs::copy(
-            lib_path.join("libicuio.so.63.1"),
-            dest_path.join("libicuio.so.63.1"),
-        )?;
-        std::fs::copy(
-            lib_path.join("libicutest.so.63"),
-            dest_path.join("libicutest.so.63"),
-        )?;
-        std::fs::copy(
-            lib_path.join("libicutest.so.63.1"),
-            dest_path.join("libicutest.so.63.1"),
-        )?;
-        std::fs::copy(
-            lib_path.join("libicutu.so.63"),
-            dest_path.join("libicutu.so.63"),
-        )?;
-        std::fs::copy(
-            lib_path.join("libicutu.so.63.1"),
-            dest_path.join("libicutu.so.63.1"),
-        )?;
-        std::fs::copy(
-            lib_path.join("libicuuc.so.63"),
-            dest_path.join("libicuuc.so.63"),
-        )?;
-        std::fs::copy(
-            lib_path.join("libicuuc.so.63.1"),
-            dest_path.join("libicuuc.so.63.1"),
-        )?;
-    }
-
     // Tell cargo to invalidate the built crate whenever the wrapper changes
     println!("cargo:rerun-if-changed=src/wrapper.h");
-
-    Ok(())
 }
