@@ -163,6 +163,22 @@ fn main() {
                 .join("libcblite-3.0.1/lib")
                 .display()
         );
+
+        let build_type = if cfg!(debug_assertions) {
+            "debug"
+        } else {
+            "release"
+        };
+
+        let lib_path = format!("libcblite-3.0.1/lib/{}", target_triplet);
+        let tankersdk_bin_path = Path::new(&tankersdk_bin_path);
+        let test_path = format!("target/{}/{}/deps/", target_triplet, build_type);
+        let unit_test_path = Path::new(&unit_test_path);
+        std::fs::create_dir_all(unit_test_path)?;
+        let target_path = unit_test_path.join("ctanker.dll");
+        if !target_path.exists() {
+            std::fs::copy(tankersdk_bin_path.join("ctanker.dll"), target_path)?;
+        }
     }
 
     // Tell cargo to invalidate the built crate whenever the wrapper changes
