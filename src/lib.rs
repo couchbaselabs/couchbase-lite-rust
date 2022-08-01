@@ -93,6 +93,8 @@ pub fn setup() {
         build_type
     ));
 
+    panic!("{:?}\n{:?}", lib_path, dest_path);
+
     std::fs::copy(
         lib_path.join("libcblite.so"),
         dest_path.join("libcblite.so"),
