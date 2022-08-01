@@ -24,9 +24,10 @@
 
 extern crate bindgen;
 
+use std::error::Error;
 use std::env;
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 // Where to find the Couchbase Lite headers and library:    //TODO: Make this easily configurable
 static CBL_INCLUDE_DIR: &str = "libcblite-3.0.1/include";
@@ -48,7 +49,7 @@ static DEFAULT_LIBCLANG_PATH: &str = "/usr/lib/";
 static STATIC_LINK_CBL: bool = false;
 static CBL_SRC_DIR: &str = "../../CBL_C";
 
-fn main() {
+fn main() -> Result<(), Box<dyn Error>> {
     // Set LIBCLANG_PATH environment variable if it's not already set:
     if env::var("LIBCLANG_PATH").is_err() {
         env::set_var("LIBCLANG_PATH", DEFAULT_LIBCLANG_PATH);
@@ -170,17 +171,76 @@ fn main() {
             "release"
         };
 
-        let lib_path = format!("libcblite-3.0.1/lib/{}", target_triplet);
-        let tankersdk_bin_path = Path::new(&tankersdk_bin_path);
-        let test_path = format!("target/{}/{}/deps/", target_triplet, build_type);
-        let unit_test_path = Path::new(&unit_test_path);
-        std::fs::create_dir_all(unit_test_path)?;
-        let target_path = unit_test_path.join("ctanker.dll");
-        if !target_path.exists() {
-            std::fs::copy(tankersdk_bin_path.join("ctanker.dll"), target_path)?;
-        }
+        let lib_path = Path::new("libcblite-3.0.1/lib/");
+        let dest_path = PathBuf::from(format!("target/{}/deps/", build_type));
+        std::fs::copy(
+            lib_path.join("libcblite.so"),
+            dest_path.join("libcblite.so"),
+        )?;
+        std::fs::copy(
+            lib_path.join("libcblite.so.3"),
+            dest_path.join("libcblite.so.3"),
+        )?;
+        std::fs::copy(
+            lib_path.join("libcblite.so.3.0.1"),
+            dest_path.join("libcblite.so.3.0.1"),
+        )?;
+        std::fs::copy(
+            lib_path.join("libcblite.so.sym"),
+            dest_path.join("libcblite.so.sym"),
+        )?;
+        std::fs::copy(
+            lib_path.join("libicudata.so.63"),
+            dest_path.join("libicudata.so.63"),
+        )?;
+        std::fs::copy(
+            lib_path.join("libicudata.so.63.1"),
+            dest_path.join("libicudata.so.63.1"),
+        )?;
+        std::fs::copy(
+            lib_path.join("libicui18n.so.63"),
+            dest_path.join("libicui18n.so.63"),
+        )?;
+        std::fs::copy(
+            lib_path.join("libicui18n.so.63.1"),
+            dest_path.join("libicui18n.so.63.1"),
+        )?;
+        std::fs::copy(
+            lib_path.join("libicuio.so.63"),
+            dest_path.join("libicuio.so.63"),
+        )?;
+        std::fs::copy(
+            lib_path.join("libicuio.so.63.1"),
+            dest_path.join("libicuio.so.63.1"),
+        )?;
+        std::fs::copy(
+            lib_path.join("libicutest.so.63"),
+            dest_path.join("libicutest.so.63"),
+        )?;
+        std::fs::copy(
+            lib_path.join("libicutest.so.63.1"),
+            dest_path.join("libicutest.so.63.1"),
+        )?;
+        std::fs::copy(
+            lib_path.join("libicutu.so.63"),
+            dest_path.join("libicutu.so.63"),
+        )?;
+        std::fs::copy(
+            lib_path.join("libicutu.so.63.1"),
+            dest_path.join("libicutu.so.63.1"),
+        )?;
+        std::fs::copy(
+            lib_path.join("libicuuc.so.63"),
+            dest_path.join("libicuuc.so.63"),
+        )?;
+        std::fs::copy(
+            lib_path.join("libicuuc.so.63.1"),
+            dest_path.join("libicuuc.so.63.1"),
+        )?;
     }
 
     // Tell cargo to invalidate the built crate whenever the wrapper changes
     println!("cargo:rerun-if-changed=src/wrapper.h");
+
+    Ok(())
 }
