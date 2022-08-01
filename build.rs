@@ -172,9 +172,16 @@ fn main() -> Result<(), Box<dyn Error>> {
         };
 
         let lib_path = Path::new("libcblite-3.0.1/lib/");
-        let dest_path = PathBuf::from(format!("target/{}/deps/", build_type));
+        let dest_path = PathBuf::from(format!("{}/{}/deps/", /*env!("CARGO_TARGET_DIR")*/ "", build_type));
+
+        let env_vars = env::vars();
+        let mut out = String::new();
+        for(key, value) in env_vars.into_iter() {
+            out.push_str(&format!("{} = {:?}\n", key, value));
+        }
+        panic!("{}\n{}\n{:?}", out, dir, std::env::var("CARGO_MANIFEST_DIR"));
         
-        panic!("curr: {:?} out: {:?} lib: {:?}  dest: {:?}", std::env::current_dir(), std::env::var("OUT_DIR"), lib_path, dest_path);
+        //panic!("curr: {:?} out: {:?} lib: {:?}  dest: {:?}", std::env::current_dir(), std::env::var("OUT_DIR"), lib_path, dest_path);
         std::fs::copy(
             lib_path.join("libcblite.so"),
             dest_path.join("libcblite.so"),
