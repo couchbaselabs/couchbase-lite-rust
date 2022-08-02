@@ -148,23 +148,103 @@ fn main() {
         println!("cargo:rustc-link-lib=dylib=cblite");
     }
 
-    if cfg!(target_os = "linux") {
-        let dir = env::var("CARGO_MANIFEST_DIR").unwrap();
-        println!(
-            "cargo:rustc-link-search=all={}",
-            std::path::Path::new(&dir)
-                .join("libcblite-3.0.1/lib")
-                .display()
-        );
-
-        println!(
-            "cargo:rustc-env=LD_LIBRARY_PATH={}",
-            std::path::Path::new(&dir)
-                .join("libcblite-3.0.1/lib")
-                .display()
-        );
-    }
-
     // Tell cargo to invalidate the built crate whenever the wrapper changes
     println!("cargo:rerun-if-changed=src/wrapper.h");
+
+    println!(
+        "cargo:rustc-link-search={}/libcblite-3.0.1/lib",
+        env!("CARGO_MANIFEST_DIR")
+    );
+
+    setup();
+}
+
+pub fn setup() {
+    let lib_path = PathBuf::from(format!(
+        "{}/libcblite-3.0.1/lib/",
+        env!("CARGO_MANIFEST_DIR")
+    ));
+
+    let dest_path = PathBuf::from(format!("{}/", std::env::var("OUT_DIR").unwrap()));
+
+    std::fs::copy(
+        lib_path.join("libcblite.so"),
+        dest_path.join("libcblite.so"),
+    )
+    .unwrap();
+    std::fs::copy(
+        lib_path.join("libcblite.so.3"),
+        dest_path.join("libcblite.so.3"),
+    )
+    .unwrap();
+    std::fs::copy(
+        lib_path.join("libcblite.so.3.0.1"),
+        dest_path.join("libcblite.so.3.0.1"),
+    )
+    .unwrap();
+    std::fs::copy(
+        lib_path.join("libcblite.so.sym"),
+        dest_path.join("libcblite.so.sym"),
+    )
+    .unwrap();
+    std::fs::copy(
+        lib_path.join("libicudata.so.63"),
+        dest_path.join("libicudata.so.63"),
+    )
+    .unwrap();
+    std::fs::copy(
+        lib_path.join("libicudata.so.63.1"),
+        dest_path.join("libicudata.so.63.1"),
+    )
+    .unwrap();
+    std::fs::copy(
+        lib_path.join("libicui18n.so.63"),
+        dest_path.join("libicui18n.so.63"),
+    )
+    .unwrap();
+    std::fs::copy(
+        lib_path.join("libicui18n.so.63.1"),
+        dest_path.join("libicui18n.so.63.1"),
+    )
+    .unwrap();
+    std::fs::copy(
+        lib_path.join("libicuio.so.63"),
+        dest_path.join("libicuio.so.63"),
+    )
+    .unwrap();
+    std::fs::copy(
+        lib_path.join("libicuio.so.63.1"),
+        dest_path.join("libicuio.so.63.1"),
+    )
+    .unwrap();
+    std::fs::copy(
+        lib_path.join("libicutest.so.63"),
+        dest_path.join("libicutest.so.63"),
+    )
+    .unwrap();
+    std::fs::copy(
+        lib_path.join("libicutest.so.63.1"),
+        dest_path.join("libicutest.so.63.1"),
+    )
+    .unwrap();
+    std::fs::copy(
+        lib_path.join("libicutu.so.63"),
+        dest_path.join("libicutu.so.63"),
+    )
+    .unwrap();
+    std::fs::copy(
+        lib_path.join("libicutu.so.63.1"),
+        dest_path.join("libicutu.so.63.1"),
+    )
+    .unwrap();
+    std::fs::copy(
+        lib_path.join("libicuuc.so.63"),
+        dest_path.join("libicuuc.so.63"),
+    )
+    .unwrap();
+    std::fs::copy(
+        lib_path.join("libicuuc.so.63.1"),
+        dest_path.join("libicuuc.so.63.1"),
+    )
+    .unwrap();
 }
