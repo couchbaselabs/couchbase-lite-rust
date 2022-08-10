@@ -80,6 +80,16 @@ impl Endpoint {
     }
 }
 
+impl Clone for Endpoint {
+    fn clone(&self) -> Self {
+        unsafe {
+            Self {
+                cbl_ref: retain(self.cbl_ref.clone()),
+            }
+        }
+    }
+}
+
 impl Drop for Endpoint {
     fn drop(&mut self) {
         unsafe {
@@ -120,6 +130,16 @@ impl Authenticator {
                     from_str(session_id).get_ref(),
                     from_str(cookie_name).get_ref(),
                 )),
+            }
+        }
+    }
+}
+
+impl Clone for Authenticator {
+    fn clone(&self) -> Self {
+        unsafe {
+            Self {
+                cbl_ref: retain(self.cbl_ref.clone()),
             }
         }
     }
@@ -187,47 +207,49 @@ impl From<ProxyType> for CBLProxyType {
 }
 
 /** Proxy settings for the replicator. */
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug)]
 pub struct ProxySettings {
-    pub proxy_type: ProxyType,    // Type of proxy
     pub hostname: Option<String>, // Proxy server hostname or IP address
-    pub port: u16,                // Proxy server port
     pub username: Option<String>, // Username for proxy auth
     pub password: Option<String>, // Password for proxy auth
+    cbl: CBLProxySettings,
 }
 
-impl From<&CBLProxySettings> for ProxySettings {
-    fn from(proxy_settings: &CBLProxySettings) -> Self {
+impl ProxySettings {
+    fn new(
+        proxy_type: ProxyType,
+        hostname: Option<String>,
+        port: u16,
+        username: Option<String>,
+        password: Option<String>,
+    ) -> Self {
+        let cbl = CBLProxySettings {
+            type_: proxy_type.into(),
+            hostname: hostname
+                .as_ref()
+                .map_or(slice::NULL_SLICE, |s| from_str(&s).get_ref()),
+            port,
+            username: username
+                .as_ref()
+                .map_or(slice::NULL_SLICE, |s| from_str(&s).get_ref()),
+            password: password
+                .as_ref()
+                .map_or(slice::NULL_SLICE, |s| from_str(&s).get_ref()),
+        };
+
         Self {
-            proxy_type: proxy_settings.type_.into(),
-            hostname: unsafe { proxy_settings.hostname.to_string() },
-            port: proxy_settings.port,
-            username: unsafe { proxy_settings.username.to_string() },
-            password: unsafe { proxy_settings.password.to_string() },
+            hostname,
+            username,
+            password,
+            cbl,
         }
     }
 }
-impl From<ProxySettings> for CBLProxySettings {
-    fn from(proxy_settings: ProxySettings) -> Self {
-        Self {
-            type_: proxy_settings.proxy_type.into(),
-            hostname: proxy_settings
-                .hostname
-                .map_or(slice::NULL_SLICE, |s| unsafe {
-                    FLSlice_Copy(from_str(&s).get_ref()).as_slice()
-                }),
-            port: proxy_settings.port,
-            username: proxy_settings
-                .username
-                .map_or(slice::NULL_SLICE, |s| unsafe {
-                    FLSlice_Copy(from_str(&s).get_ref()).as_slice()
-                }),
-            password: proxy_settings
-                .password
-                .map_or(slice::NULL_SLICE, |s| unsafe {
-                    FLSlice_Copy(from_str(&s).get_ref()).as_slice()
-                }),
-        }
+
+impl CblRef for ProxySettings {
+    type Output = *const CBLProxySettings;
+    fn get_ref(&self) -> Self::Output {
+        &self.cbl as *const _
     }
 }
 
@@ -459,81 +481,13 @@ pub struct ReplicatorConfiguration {
     pub property_decryptor: Option<PropertyDecryptor>, //< Optional callback to decrypt encrypted \ref CBLEncryptable values.
 }
 
-impl ReplicatorConfiguration {
-    fn init(
-        self,
-    ) -> (
-        CBLReplicatorConfiguration,
-        Box<ReplicationConfigurationContext>,
-    ) {
-        let context: Box<ReplicationConfigurationContext> =
-            Box::new(ReplicationConfigurationContext {
-                push_filter: self.push_filter,
-                pull_filter: self.pull_filter,
-                conflict_resolver: self.conflict_resolver,
-                property_encryptor: self.property_encryptor,
-                property_decryptor: self.property_decryptor,
-            });
-
-        let proxy = self
-            .proxy
-            .map(|p| Box::new(p.into()))
-            .map_or(ptr::null_mut(), Box::into_raw);
-        unsafe {
-            (
-                CBLReplicatorConfiguration {
-                    database: retain(self.database.get_ref()),
-                    endpoint: retain(self.endpoint.get_ref()),
-                    replicatorType: self.replicator_type.into(),
-                    continuous: self.continuous,
-                    disableAutoPurge: self.disable_auto_purge,
-                    maxAttempts: self.max_attempts,
-                    maxAttemptWaitTime: self.max_attempt_wait_time,
-                    heartbeat: self.heartbeat,
-                    authenticator: self.authenticator.map_or(ptr::null_mut(), |a| a.get_ref()),
-                    proxy,
-                    headers: MutableDict::from_hashmap(&self.headers).as_dict().get_ref(),
-                    pinnedServerCertificate: self
-                        .pinned_server_certificate
-                        .map_or(slice::NULL_SLICE, |c| slice::from_bytes(&c).get_ref()),
-                    trustedRootCertificates: self
-                        .trusted_root_certificates
-                        .map_or(slice::NULL_SLICE, |c| slice::from_bytes(&c).get_ref()),
-                    channels: self.channels.get_ref(),
-                    documentIDs: self.document_ids.get_ref(),
-                    pushFilter: (*context)
-                        .push_filter
-                        .as_ref()
-                        .and(Some(c_replication_push_filter)),
-                    pullFilter: (*context)
-                        .pull_filter
-                        .as_ref()
-                        .and(Some(c_replication_pull_filter)),
-                    conflictResolver: (*context)
-                        .conflict_resolver
-                        .as_ref()
-                        .and(Some(c_replication_conflict_resolver)),
-                    context: std::mem::transmute(&*context),
-                    propertyEncryptor: (*context)
-                        .property_encryptor
-                        .and(Some(c_property_encryptor)),
-                    propertyDecryptor: (*context)
-                        .property_decryptor
-                        .and(Some(c_property_decryptor)),
-                },
-                context,
-            )
-        }
-    }
-}
-
 //======== LIFECYCLE
 
 /** A background task that syncs a \ref Database with a remote server or peer. */
 pub struct Replicator {
     cbl_ref: *mut CBLReplicator,
-    #[allow(dead_code)]
-    context: Box<ReplicationConfigurationContext>,
+    config: Option<ReplicatorConfiguration>,
+    headers: Option<MutableDict>,
 }
 
 impl CblRef for Replicator {
@@ -547,14 +501,64 @@ impl Replicator {
     /** Creates a replicator with the given configuration. */
     pub fn new(config: ReplicatorConfiguration) -> Result<Self> {
         unsafe {
-            let (cbl_config, context) = config.init();
+            // let (cbl_config, context) = config.init();
+            //
+            // let context: Box<ReplicationConfigurationContext> =
+            // Box::new(ReplicationConfigurationContext {
+            // push_filter: config.push_filter,
+            // pull_filter: config.pull_filter,
+            // conflict_resolver: config.conflict_resolver,
+            // property_encryptor: config.property_encryptor,
+            // property_decryptor: config.property_decryptor,
+            // });
+            //
+
+            let headers = MutableDict::from_hashmap(&config.headers);
+
+            let cbl_config = CBLReplicatorConfiguration {
+                database: retain(config.database.get_ref()),
+                endpoint: retain(config.endpoint.get_ref()),
+                replicatorType: 0,
+                continuous: config.continuous,
+                disableAutoPurge: config.disable_auto_purge,
+                maxAttempts: config.max_attempts,
+                maxAttemptWaitTime: config.max_attempt_wait_time,
+                heartbeat: config.heartbeat,
+                authenticator: config
+                    .authenticator
+                    .as_ref()
+                    .map_or(ptr::null_mut(), |a| a.get_ref()),
+                proxy: config
+                    .proxy
+                    .as_ref()
+                    .and_then(|proxy| Some(proxy.get_ref()))
+                    .unwrap_or(ptr::null_mut()),
+                headers: headers.as_dict().get_ref(),
+                pinnedServerCertificate: config
+                    .pinned_server_certificate
+                    .as_ref()
+                    .map_or(slice::NULL_SLICE, |c| slice::from_bytes(&c).get_ref()),
+                trustedRootCertificates: config
+                    .trusted_root_certificates
+                    .as_ref()
+                    .map_or(slice::NULL_SLICE, |c| slice::from_bytes(&c).get_ref()),
+                channels: config.channels.get_ref(),
+                documentIDs: config.document_ids.get_ref(),
+                pushFilter: None,
+                pullFilter: None,
+                conflictResolver: None,
+                context: ptr::null_mut(),
+                propertyEncryptor: None,
+                propertyDecryptor: None,
+            };
 
             let mut error = CBLError::default();
             let replicator = CBLReplicator_Create(&cbl_config, std::ptr::addr_of_mut!(error));
 
-            check_error(&error).map(|_| Self {
+            check_error(&error).map(move |_| Self {
                 cbl_ref: replicator,
-                context,
+                config: Some(config),
+                headers: Some(headers),
             })
         }
     }
@@ -672,7 +676,8 @@ unsafe extern "C" fn c_replicator_change_listener(
 
     let replicator = Replicator {
         cbl_ref: retain(replicator),
-        context: Box::from_raw(context as *mut _),
+        config: None,
+        headers: None,
     };
     let status: ReplicatorStatus = (*status).into();
 
@@ -692,7 +697,8 @@ unsafe extern "C" fn c_replicator_document_change_listener(
 
     let replicator = Replicator {
         cbl_ref: retain(replicator),
-        context: Box::from_raw(std::mem::transmute(&context)),
+        config: None,
+        headers: None,
     };
     let direction = if is_push {
         Direction::Pushed
