@@ -23,7 +23,7 @@ use std::{
 };
 use crate::{
     CblRef, Database, Dict, Document, Error, ListenerToken, MutableDict, Result, check_error,
-    release, retain, Array,
+    release, retain,
     slice::{from_str, from_bytes, self},
     c_api::{
         CBLAuth_CreatePassword, CBLAuth_CreateSession, CBLAuthenticator, CBLDocument,
@@ -39,6 +39,7 @@ use crate::{
         kCBLReplicatorConnecting, kCBLReplicatorIdle, kCBLReplicatorOffline, kCBLReplicatorStopped,
         kCBLReplicatorTypePull, kCBLReplicatorTypePush, kCBLReplicatorTypePushAndPull,
     },
+    MutableArray,
 };
 
 // WARNING: THIS API IS UNIMPLEMENTED SO FAR
@@ -49,6 +50,7 @@ use crate::{
 #[derive(Debug, PartialEq, Eq)]
 pub struct Endpoint {
     pub(crate) cbl_ref: *mut CBLEndpoint,
+    pub url: Option<String>,
 }
 
 impl CblRef for Endpoint {
@@ -62,11 +64,13 @@ impl Endpoint {
     pub fn new_with_url(url: &str) -> Result<Self> {
         unsafe {
             let mut error = CBLError::default();
+            let url = format!("{}/", url);
             let endpoint: *mut CBLEndpoint =
-                CBLEndpoint_CreateWithURL(from_str(url).get_ref(), std::ptr::addr_of_mut!(error));
+                CBLEndpoint_CreateWithURL(from_str(&url).get_ref(), std::ptr::addr_of_mut!(error));
 
             check_error(&error).map(|_| Self {
                 cbl_ref: retain(endpoint),
+                url: Some(url),
             })
         }
     }
@@ -75,6 +79,7 @@ impl Endpoint {
         unsafe {
             Self {
                 cbl_ref: retain(CBLEndpoint_CreateWithLocalDB(db.get_ref())),
+                url: None,
             }
         }
     }
@@ -84,7 +89,8 @@ impl Clone for Endpoint {
     fn clone(&self) -> Self {
         unsafe {
             Self {
-                cbl_ref: retain(self.cbl_ref.clone()),
+                cbl_ref: retain(self.cbl_ref),
+                url: self.url.clone(),
             }
         }
     }
@@ -139,7 +145,7 @@ impl Clone for Authenticator {
     fn clone(&self) -> Self {
         unsafe {
             Self {
-                cbl_ref: retain(self.cbl_ref.clone()),
+                cbl_ref: retain(self.cbl_ref),
             }
         }
     }
@@ -216,7 +222,7 @@ pub struct ProxySettings {
 }
 
 impl ProxySettings {
-    fn new(
+    pub fn new(
         proxy_type: ProxyType,
         hostname: Option<String>,
         port: u16,
@@ -227,14 +233,14 @@ impl ProxySettings {
             type_: proxy_type.into(),
             hostname: hostname
                 .as_ref()
-                .map_or(slice::NULL_SLICE, |s| from_str(&s).get_ref()),
+                .map_or(slice::NULL_SLICE, |s| from_str(s).get_ref()),
             port,
             username: username
                 .as_ref()
-                .map_or(slice::NULL_SLICE, |s| from_str(&s).get_ref()),
+                .map_or(slice::NULL_SLICE, |s| from_str(s).get_ref()),
             password: password
                 .as_ref()
-                .map_or(slice::NULL_SLICE, |s| from_str(&s).get_ref()),
+                .map_or(slice::NULL_SLICE, |s| from_str(s).get_ref()),
         };
 
         Self {
@@ -433,7 +439,7 @@ pub extern "C" fn c_property_decryptor(
     }
 }
 
-struct ReplicationConfigurationContext {
+pub struct ReplicationConfigurationContext {
     pub push_filter: Option<ReplicationFilter>,
     pub pull_filter: Option<ReplicationFilter>,
     pub conflict_resolver: Option<ConflictResolver>,
@@ -471,14 +477,8 @@ pub struct ReplicatorConfiguration {
     pub pinned_server_certificate: Option<Vec<u8>>, // An X.509 cert to "pin" TLS connections to (PEM or DER)
     pub trusted_root_certificates: Option<Vec<u8>>, // Set of anchor certs (PEM format)
     //-- Filtering:
-    pub channels: Array,     // Optional set of channels to pull from
-    pub document_ids: Array, // Optional set of document IDs to replicate
-    pub push_filter: Option<ReplicationFilter>, // Optional callback to filter which docs are pushed
-    pub pull_filter: Option<ReplicationFilter>, // Optional callback to validate incoming docs
-    pub conflict_resolver: Option<ConflictResolver>, // Optional conflict-resolver callback
-    //-- Property Encryption
-    pub property_encryptor: Option<PropertyEncryptor>, //< Optional callback to encrypt \ref CBLEncryptable values.
-    pub property_decryptor: Option<PropertyDecryptor>, //< Optional callback to decrypt encrypted \ref CBLEncryptable values.
+    pub channels: MutableArray, // Optional set of channels to pull from
+    pub document_ids: MutableArray, // Optional set of document IDs to replicate
 }
 
 //======== LIFECYCLE
@@ -486,8 +486,8 @@ pub struct ReplicatorConfiguration {
 /** A background task that syncs a \ref Database with a remote server or peer. */
 pub struct Replicator {
     cbl_ref: *mut CBLReplicator,
-    config: Option<ReplicatorConfiguration>,
-    headers: Option<MutableDict>,
+    pub config: Option<ReplicatorConfiguration>,
+    pub headers: Option<MutableDict>,
 }
 
 impl CblRef for Replicator {
@@ -499,20 +499,11 @@ impl CblRef for Replicator {
 
 impl Replicator {
     /** Creates a replicator with the given configuration. */
-    pub fn new(config: ReplicatorConfiguration) -> Result<Self> {
+    pub fn new(
+        config: ReplicatorConfiguration,
+        context: ReplicationConfigurationContext,
+    ) -> Result<Self> {
         unsafe {
-            // let (cbl_config, context) = config.init();
-            //
-            // let context: Box<ReplicationConfigurationContext> =
-            // Box::new(ReplicationConfigurationContext {
-            // push_filter: config.push_filter,
-            // pull_filter: config.pull_filter,
-            // conflict_resolver: config.conflict_resolver,
-            // property_encryptor: config.property_encryptor,
-            // property_decryptor: config.property_decryptor,
-            // });
-            //
-
             let headers = MutableDict::from_hashmap(&config.headers);
 
             let cbl_config = CBLReplicatorConfiguration {
@@ -531,25 +522,34 @@ impl Replicator {
                 proxy: config
                     .proxy
                     .as_ref()
-                    .and_then(|proxy| Some(proxy.get_ref()))
+                    .map(|proxy| proxy.get_ref())
                     .unwrap_or(ptr::null_mut()),
                 headers: headers.as_dict().get_ref(),
                 pinnedServerCertificate: config
                     .pinned_server_certificate
                     .as_ref()
-                    .map_or(slice::NULL_SLICE, |c| slice::from_bytes(&c).get_ref()),
+                    .map_or(slice::NULL_SLICE, |c| slice::from_bytes(c).get_ref()),
                 trustedRootCertificates: config
                     .trusted_root_certificates
                     .as_ref()
-                    .map_or(slice::NULL_SLICE, |c| slice::from_bytes(&c).get_ref()),
+                    .map_or(slice::NULL_SLICE, |c| slice::from_bytes(c).get_ref()),
                 channels: config.channels.get_ref(),
                 documentIDs: config.document_ids.get_ref(),
-                pushFilter: None,
-                pullFilter: None,
-                conflictResolver: None,
+                pushFilter: context
+                    .pull_filter
+                    .as_ref()
+                    .and(Some(c_replication_push_filter)),
+                pullFilter: context
+                    .pull_filter
+                    .as_ref()
+                    .and(Some(c_replication_pull_filter)),
+                conflictResolver: context
+                    .pull_filter
+                    .as_ref()
+                    .and(Some(c_replication_conflict_resolver)),
+                propertyEncryptor: context.pull_filter.as_ref().and(Some(c_property_encryptor)),
+                propertyDecryptor: context.pull_filter.as_ref().and(Some(c_property_decryptor)),
                 context: ptr::null_mut(),
-                propertyEncryptor: None,
-                propertyDecryptor: None,
             };
 
             let mut error = CBLError::default();
