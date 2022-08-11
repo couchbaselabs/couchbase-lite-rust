@@ -96,7 +96,7 @@ impl CblRef for ListenerToken {
 
 impl Drop for ListenerToken {
     fn drop(&mut self) {
-        unsafe { CBLListener_Remove(self.get_ref()) }
+        // unsafe { CBLListener_Remove(self.get_ref()) }
     }
 }
 

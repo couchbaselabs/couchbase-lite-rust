@@ -439,6 +439,7 @@ pub extern "C" fn c_property_decryptor(
     }
 }
 
+#[derive(Default)]
 pub struct ReplicationConfigurationContext {
     pub push_filter: Option<ReplicationFilter>,
     pub pull_filter: Option<ReplicationFilter>,
@@ -488,6 +489,7 @@ pub struct Replicator {
     cbl_ref: *mut CBLReplicator,
     pub config: Option<ReplicatorConfiguration>,
     pub headers: Option<MutableDict>,
+    pub context: Option<ReplicationConfigurationContext>
 }
 
 impl CblRef for Replicator {
@@ -543,13 +545,14 @@ impl Replicator {
                     .pull_filter
                     .as_ref()
                     .and(Some(c_replication_pull_filter)),
-                conflictResolver: context
-                    .pull_filter
-                    .as_ref()
-                    .and(Some(c_replication_conflict_resolver)),
+                // conflictResolver: context
+                    // .pull_filter
+                    // .as_ref()
+                    // .and(Some(c_replication_conflict_resolver)),
+                conflictResolver: Some(c_replication_conflict_resolver),
                 propertyEncryptor: context.pull_filter.as_ref().and(Some(c_property_encryptor)),
                 propertyDecryptor: context.pull_filter.as_ref().and(Some(c_property_decryptor)),
-                context: ptr::null_mut(),
+                context: std::mem::transmute(&context),
             };
 
             let mut error = CBLError::default();
@@ -559,6 +562,7 @@ impl Replicator {
                 cbl_ref: replicator,
                 config: Some(config),
                 headers: Some(headers),
+                context: Some(context)
             })
         }
     }
@@ -604,6 +608,14 @@ impl Replicator {
 
 impl Drop for Replicator {
     fn drop(&mut self) {
+        use std::sync::atomic::AtomicBool;
+        let stopped = AtomicBool::new(false);
+
+        // self.add_change_listener(Box::new(move |_, status| {
+           // if status.activity == ReplicatorActivityLevel::Stopped || status.activity == ReplicatorActivityLevel::Offline || status.error.is_err() {
+             // stopped.store(true, std::sync::atomic::Ordering::SeqCst);
+           // }
+        // }));
         unsafe { release(self.get_ref()) }
     }
 }
@@ -611,7 +623,7 @@ impl Drop for Replicator {
 //======== STATUS AND PROGRESS
 
 /** The possible states a replicator can be in during its lifecycle. */
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum ReplicatorActivityLevel {
     Stopped,    // The replicator is unstarted, finished, or hit a fatal error.
     Offline,    // The replicator is offline, as the remote host is unreachable.
@@ -678,6 +690,7 @@ unsafe extern "C" fn c_replicator_change_listener(
         cbl_ref: retain(replicator),
         config: None,
         headers: None,
+        context: None
     };
     let status: ReplicatorStatus = (*status).into();
 
@@ -699,6 +712,7 @@ unsafe extern "C" fn c_replicator_document_change_listener(
         cbl_ref: retain(replicator),
         config: None,
         headers: None,
+        context: None,
     };
     let direction = if is_push {
         Direction::Pushed
