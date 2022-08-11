@@ -116,8 +116,8 @@ fn generate_replication_configuration(
 pub fn with_three_dbs<F>(
     config1: ReplicationTestConfiguration,
     config2: ReplicationTestConfiguration,
-    context1: ReplicationConfigurationContext,
-    context2: ReplicationConfigurationContext,
+    context1: Box<ReplicationConfigurationContext>,
+    context2: Box<ReplicationConfigurationContext>,
     f: F,
 ) where
     F: Fn(&mut Database, &mut Database, &mut Database, &mut Replicator, &mut Replicator),

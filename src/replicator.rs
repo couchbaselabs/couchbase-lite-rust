@@ -489,7 +489,7 @@ pub struct Replicator {
     cbl_ref: *mut CBLReplicator,
     pub config: Option<ReplicatorConfiguration>,
     pub headers: Option<MutableDict>,
-    pub context: Option<ReplicationConfigurationContext>,
+    pub context: Option<Box<ReplicationConfigurationContext>>,
 }
 
 impl CblRef for Replicator {
@@ -503,7 +503,7 @@ impl Replicator {
     /** Creates a replicator with the given configuration. */
     pub fn new(
         config: ReplicatorConfiguration,
-        context: ReplicationConfigurationContext,
+        context: Box<ReplicationConfigurationContext>,
     ) -> Result<Self> {
         unsafe {
             let headers = MutableDict::from_hashmap(&config.headers);
@@ -557,7 +557,7 @@ impl Replicator {
                     .property_decryptor
                     .as_ref()
                     .and(Some(c_property_decryptor)),
-                context: &context as *const ReplicationConfigurationContext
+                context: &*context as *const ReplicationConfigurationContext
                     as *mut std::ffi::c_void,
             };
 
@@ -614,14 +614,6 @@ impl Replicator {
 
 impl Drop for Replicator {
     fn drop(&mut self) {
-        // use std::sync::atomic::AtomicBool;
-        // let stopped = AtomicBool::new(false);
-
-        // self.add_change_listener(Box::new(move |_, status| {
-        // if status.activity == ReplicatorActivityLevel::Stopped || status.activity == ReplicatorActivityLevel::Offline || status.error.is_err() {
-        // stopped.store(true, std::sync::atomic::Ordering::SeqCst);
-        // }
-        // }));
         unsafe { release(self.get_ref()) }
     }
 }

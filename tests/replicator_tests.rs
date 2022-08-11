@@ -34,8 +34,8 @@ fn basic_local_replication() {
     utils::with_three_dbs(
         config1,
         config2,
-        ReplicationConfigurationContext::default(),
-        ReplicationConfigurationContext::default(),
+        Box::new(ReplicationConfigurationContext::default()),
+        Box::new(ReplicationConfigurationContext::default()),
         |local_db1, local_db2, central_db, _repl1, _repl2| {
             // Save doc
             utils::add_doc(local_db1, "foo", 1234, "Hello World!");
@@ -66,8 +66,8 @@ fn pull_type_not_pushing() {
     utils::with_three_dbs(
         config1,
         config2,
-        ReplicationConfigurationContext::default(),
-        ReplicationConfigurationContext::default(),
+        Box::new(ReplicationConfigurationContext::default()),
+        Box::new(ReplicationConfigurationContext::default()),
         |local_db1, local_db2, central_db, _repl1, _repl2| {
             // Save doc in DB 1
             utils::add_doc(local_db1, "foo", 1234, "Hello World!");
@@ -105,8 +105,8 @@ fn push_type_not_pulling() {
     utils::with_three_dbs(
         config1,
         config2,
-        ReplicationConfigurationContext::default(),
-        ReplicationConfigurationContext::default(),
+        Box::new(ReplicationConfigurationContext::default()),
+        Box::new(ReplicationConfigurationContext::default()),
         |local_db1, local_db2, central_db, _repl1, _repl2| {
             // Save doc in DB 1
             utils::add_doc(local_db1, "foo", 1234, "Hello World!");
@@ -149,8 +149,8 @@ fn document_ids() {
     utils::with_three_dbs(
         config1,
         config2,
-        ReplicationConfigurationContext::default(),
-        ReplicationConfigurationContext::default(),
+        Box::new(ReplicationConfigurationContext::default()),
+        Box::new(ReplicationConfigurationContext::default()),
         |local_db1, _local_db2, central_db, _repl1, _repl2| {
             // Save doc 'foo' and 'foo2'
             utils::add_doc(local_db1, "foo", 1234, "Hello World!");
@@ -197,8 +197,8 @@ fn push_and_pull_filter() {
     utils::with_three_dbs(
         config1,
         config2,
-        context1,
-        context2,
+        Box::new(context1),
+        Box::new(context2),
         |local_db1, local_db2, central_db, _repl1, _repl2| {
             // Save doc 'foo', 'foo2' & 'foo3'
             utils::add_doc(local_db1, "foo", 1234, "Hello World!");
@@ -257,8 +257,8 @@ fn conflict_resolver() {
     utils::with_three_dbs(
         config1,
         config2,
-        context1,
-        context2,
+        Box::new(context1),
+        Box::new(context2),
         |local_db1, local_db2, central_db, repl1, _repl2| {
             let i = 1234;
             let i1 = 1;
@@ -378,8 +378,8 @@ fn encryption_decryption() {
     utils::with_three_dbs(
         config1,
         config2,
-        context1,
-        context2,
+        Box::new(context1),
+        Box::new(context2),
         |local_db1, local_db2, central_db, _repl1, _repl2| {
             // Save doc 'foo' with an encryptable property
             {

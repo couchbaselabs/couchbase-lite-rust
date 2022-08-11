@@ -274,8 +274,8 @@ fn database_delete_document() {
     utils::with_three_dbs(
         config1,
         config2,
-        context1,
-        context2,
+        Box::new(context1),
+        Box::new(context2),
         |local_db1, local_db2, central_db, _repl1, _repl2| {
             // Save doc 'foo'
             utils::add_doc(local_db1, "foo", 1234, "Hello World!");
