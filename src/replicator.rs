@@ -160,7 +160,7 @@ impl Drop for Authenticator {
 }
 
 /** Direction of replication: push, pull, or both. */
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ReplicatorType {
     PushAndPull,
     Push,
@@ -511,7 +511,7 @@ impl Replicator {
             let cbl_config = CBLReplicatorConfiguration {
                 database: retain(config.database.get_ref()),
                 endpoint: retain(config.endpoint.get_ref()),
-                replicatorType: 0,
+                replicatorType: config.replicator_type.clone().into(),
                 continuous: config.continuous,
                 disableAutoPurge: config.disable_auto_purge,
                 maxAttempts: config.max_attempts,
@@ -549,8 +549,14 @@ impl Replicator {
                     .conflict_resolver
                     .as_ref()
                     .and(Some(c_replication_conflict_resolver)),
-                propertyEncryptor: context.pull_filter.as_ref().and(Some(c_property_encryptor)),
-                propertyDecryptor: context.pull_filter.as_ref().and(Some(c_property_decryptor)),
+                propertyEncryptor: context
+                    .property_encryptor
+                    .as_ref()
+                    .and(Some(c_property_encryptor)),
+                propertyDecryptor: context
+                    .property_decryptor
+                    .as_ref()
+                    .and(Some(c_property_decryptor)),
                 context: &context as *const ReplicationConfigurationContext
                     as *mut std::ffi::c_void,
             };
