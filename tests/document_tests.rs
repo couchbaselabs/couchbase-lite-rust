@@ -257,10 +257,7 @@ fn database_delete_document() {
     let config1 = utils::ReplicationTestConfiguration::default();
     let config2 = utils::ReplicationTestConfiguration::default();
 
-    utils::with_three_dbs(
-        config1,
-        config2,
-        ReplicationConfigurationContext {
+    let context1 = ReplicationConfigurationContext {
             push_filter: Some(Box::new(move |document, is_deleted, _is_access_removed| {
                 if is_deleted && document.id() == "foo" {
                     sender.send(true).unwrap();
@@ -271,8 +268,14 @@ fn database_delete_document() {
             conflict_resolver: None,
             property_encryptor: None,
             property_decryptor: None,
-        },
-        ReplicationConfigurationContext::default(),
+        };
+    let context2 = ReplicationConfigurationContext::default();
+
+    utils::with_three_dbs(
+        config1,
+        config2,
+        context1,
+        context2,
         |local_db1, local_db2, central_db, _repl1, _repl2| {
             // Save doc 'foo'
             utils::add_doc(local_db1, "foo", 1234, "Hello World!");

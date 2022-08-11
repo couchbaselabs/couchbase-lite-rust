@@ -538,18 +538,17 @@ impl Replicator {
                 channels: config.channels.get_ref(),
                 documentIDs: config.document_ids.get_ref(),
                 pushFilter: context
-                    .pull_filter
+                    .push_filter
                     .as_ref()
                     .and(Some(c_replication_push_filter)),
                 pullFilter: context
                     .pull_filter
                     .as_ref()
                     .and(Some(c_replication_pull_filter)),
-                // conflictResolver: context
-                    // .pull_filter
-                    // .as_ref()
-                    // .and(Some(c_replication_conflict_resolver)),
-                conflictResolver: Some(c_replication_conflict_resolver),
+                conflictResolver: context
+                    .conflict_resolver
+                    .as_ref()
+                    .and(Some(c_replication_conflict_resolver)),
                 propertyEncryptor: context.pull_filter.as_ref().and(Some(c_property_encryptor)),
                 propertyDecryptor: context.pull_filter.as_ref().and(Some(c_property_decryptor)),
                 context: std::mem::transmute(&context),
