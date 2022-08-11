@@ -26,10 +26,10 @@ use crate::{
     release, retain,
     slice::{from_str, from_bytes, self},
     c_api::{
-        CBLAuth_CreatePassword, CBLAuth_CreateSession, CBLAuthenticator, CBLDocument,
-        CBLDocumentFlags, CBLEndpoint, CBLEndpoint_CreateWithLocalDB, CBLEndpoint_CreateWithURL,
-        CBLError, CBLProxySettings, CBLProxyType, CBLReplicatedDocument, CBLReplicator,
-        CBLReplicatorConfiguration, CBLReplicatorStatus, CBLReplicatorType,
+        CBLListener_Remove, CBLAuth_CreatePassword, CBLAuth_CreateSession, CBLAuthenticator,
+        CBLDocument, CBLDocumentFlags, CBLEndpoint, CBLEndpoint_CreateWithLocalDB,
+        CBLEndpoint_CreateWithURL, CBLError, CBLProxySettings, CBLProxyType, CBLReplicatedDocument,
+        CBLReplicator, CBLReplicatorConfiguration, CBLReplicatorStatus, CBLReplicatorType,
         CBLReplicator_AddChangeListener, CBLReplicator_AddDocumentReplicationListener,
         CBLReplicator_Create, CBLReplicator_IsDocumentPending, CBLReplicator_PendingDocumentIDs,
         CBLReplicator_SetHostReachable, CBLReplicator_SetSuspended, CBLReplicator_Start,
@@ -585,7 +585,23 @@ impl Replicator {
     \ref kCBLReplicatorStopped after it stops. Until then, consider it still active. */
     pub fn stop(&mut self) {
         unsafe {
+            use std::sync::mpsc::channel;
+            let (sender, receiver) = channel();
+            let c = C {
+                c: Some(Box::new(move |_, status| {
+                    if status.activity == ReplicatorActivityLevel::Stopped {
+                        sender.send(true).unwrap();
+                    }
+                })),
+            };
+            let a = CBLReplicator_AddChangeListener(
+                self.get_ref(),
+                Some(c_replicator_change_listener),
+                std::mem::transmute(&c),
+            );
             CBLReplicator_Stop(self.get_ref());
+            receiver.recv().unwrap();
+            CBLListener_Remove(a);
         }
     }
 
@@ -674,15 +690,20 @@ impl From<CBLReplicatorStatus> for ReplicatorStatus {
     }
 }
 
+#[derive(Default)]
+pub struct C {
+    pub c: Option<ReplicatorChangeListener>,
+}
+
 /** A callback that notifies you when the replicator's status changes. */
-pub type ReplicatorChangeListener = Box<dyn FnMut(&Replicator, ReplicatorStatus)>;
+pub type ReplicatorChangeListener = Box<dyn Fn(&Replicator, ReplicatorStatus)>;
 #[no_mangle]
 unsafe extern "C" fn c_replicator_change_listener(
     context: *mut ::std::os::raw::c_void,
     replicator: *mut CBLReplicator,
     status: *const CBLReplicatorStatus,
 ) {
-    let mut callback: Box<ReplicatorChangeListener> = Box::from_raw(context as *mut _);
+    let callback = context as *const ReplicatorChangeListener;
 
     let replicator = Replicator {
         cbl_ref: retain(replicator),
@@ -691,8 +712,7 @@ unsafe extern "C" fn c_replicator_change_listener(
         context: None,
     };
     let status: ReplicatorStatus = (*status).into();
-
-    callback(&replicator, status);
+    (*callback)(&replicator, status)
 }
 
 /** A callback that notifies you when documents are replicated. */
