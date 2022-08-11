@@ -489,7 +489,7 @@ pub struct Replicator {
     cbl_ref: *mut CBLReplicator,
     pub config: Option<ReplicatorConfiguration>,
     pub headers: Option<MutableDict>,
-    pub context: Option<ReplicationConfigurationContext>
+    pub context: Option<ReplicationConfigurationContext>,
 }
 
 impl CblRef for Replicator {
@@ -551,7 +551,8 @@ impl Replicator {
                     .and(Some(c_replication_conflict_resolver)),
                 propertyEncryptor: context.pull_filter.as_ref().and(Some(c_property_encryptor)),
                 propertyDecryptor: context.pull_filter.as_ref().and(Some(c_property_decryptor)),
-                context: std::mem::transmute(&context),
+                context: &context as *const ReplicationConfigurationContext
+                    as *mut std::ffi::c_void,
             };
 
             let mut error = CBLError::default();
@@ -561,7 +562,7 @@ impl Replicator {
                 cbl_ref: replicator,
                 config: Some(config),
                 headers: Some(headers),
-                context: Some(context)
+                context: Some(context),
             })
         }
     }
@@ -607,13 +608,13 @@ impl Replicator {
 
 impl Drop for Replicator {
     fn drop(&mut self) {
-        use std::sync::atomic::AtomicBool;
-        let stopped = AtomicBool::new(false);
+        // use std::sync::atomic::AtomicBool;
+        // let stopped = AtomicBool::new(false);
 
         // self.add_change_listener(Box::new(move |_, status| {
-           // if status.activity == ReplicatorActivityLevel::Stopped || status.activity == ReplicatorActivityLevel::Offline || status.error.is_err() {
-             // stopped.store(true, std::sync::atomic::Ordering::SeqCst);
-           // }
+        // if status.activity == ReplicatorActivityLevel::Stopped || status.activity == ReplicatorActivityLevel::Offline || status.error.is_err() {
+        // stopped.store(true, std::sync::atomic::Ordering::SeqCst);
+        // }
         // }));
         unsafe { release(self.get_ref()) }
     }
@@ -689,7 +690,7 @@ unsafe extern "C" fn c_replicator_change_listener(
         cbl_ref: retain(replicator),
         config: None,
         headers: None,
-        context: None
+        context: None,
     };
     let status: ReplicatorStatus = (*status).into();
 

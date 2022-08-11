@@ -49,8 +49,7 @@ pub mod slice;
 mod c_api;
 
 use self::c_api::{
-    CBLListenerToken, CBLListener_Remove, CBLRefCounted, CBL_DumpInstances, CBL_InstanceCount,
-    CBL_Release, CBL_Retain,
+    CBLListenerToken, CBLRefCounted, CBL_DumpInstances, CBL_InstanceCount, CBL_Release, CBL_Retain,
 };
 
 //////// RE-EXPORT:

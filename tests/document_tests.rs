@@ -258,17 +258,17 @@ fn database_delete_document() {
     let config2 = utils::ReplicationTestConfiguration::default();
 
     let context1 = ReplicationConfigurationContext {
-            push_filter: Some(Box::new(move |document, is_deleted, _is_access_removed| {
-                if is_deleted && document.id() == "foo" {
-                    sender.send(true).unwrap();
-                }
-                true
-            })),
-            pull_filter: None,
-            conflict_resolver: None,
-            property_encryptor: None,
-            property_decryptor: None,
-        };
+        push_filter: Some(Box::new(move |document, is_deleted, _is_access_removed| {
+            if is_deleted && document.id() == "foo" {
+                sender.send(true).unwrap();
+            }
+            true
+        })),
+        pull_filter: None,
+        conflict_resolver: None,
+        property_encryptor: None,
+        property_decryptor: None,
+    };
     let context2 = ReplicationConfigurationContext::default();
 
     utils::with_three_dbs(
