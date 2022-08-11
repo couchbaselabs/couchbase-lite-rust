@@ -205,22 +205,6 @@ fn database_purge_document() {
 }
 
 #[test]
-fn database_document_expiration() {
-    utils::with_db(|db| {
-        let mut document = Document::new_with_id("foo");
-        db.save_document_with_concurency_control(&mut document, ConcurrencyControl::FailOnConflict)
-            .expect("save_document");
-        let expiration = db.document_expiration("foo").expect("document_expiration");
-        assert!(expiration.is_none());
-        db.set_document_expiration("foo", Some(Timestamp(1000000000)))
-            .expect("set_document_expiration");
-        let expiration = db.document_expiration("foo").expect("document_expiration");
-        assert!(expiration.is_some());
-        assert_eq!(expiration.unwrap().0, 1000000000);
-    });
-}
-
-#[test]
 fn database_add_document_change_listener() {
     utils::with_db(|db| {
         let (sender, receiver) = std::sync::mpsc::channel();
@@ -306,4 +290,26 @@ fn database_delete_document() {
             receiver.recv_timeout(Duration::from_secs(10)).unwrap();
         },
     );
+}
+
+#[cfg(feature = "unsafe-threads-test")]
+mod unsafe_threads_test {
+    #[test]
+    fn database_document_expiration() {
+        utils::with_db(|db| {
+            let mut document = Document::new_with_id("foo");
+            db.save_document_with_concurency_control(
+                &mut document,
+                ConcurrencyControl::FailOnConflict,
+            )
+            .expect("save_document");
+            let expiration = db.document_expiration("foo").expect("document_expiration");
+            assert!(expiration.is_none());
+            db.set_document_expiration("foo", Some(Timestamp(1000000000)))
+                .expect("set_document_expiration");
+            let expiration = db.document_expiration("foo").expect("document_expiration");
+            assert!(expiration.is_some());
+            assert_eq!(expiration.unwrap().0, 1000000000);
+        });
+    }
 }
