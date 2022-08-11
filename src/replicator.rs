@@ -20,6 +20,7 @@
 use std::{
     ptr,
     collections::{HashMap, HashSet},
+    sync::mpsc::channel,
 };
 use crate::{
     CblRef, Database, Dict, Document, Error, ListenerToken, MutableDict, Result, check_error,
@@ -585,19 +586,16 @@ impl Replicator {
     \ref kCBLReplicatorStopped after it stops. Until then, consider it still active. */
     pub fn stop(&mut self) {
         unsafe {
-            use std::sync::mpsc::channel;
             let (sender, receiver) = channel();
-            let c = C {
-                c: Some(Box::new(move |_, status| {
-                    if status.activity == ReplicatorActivityLevel::Stopped {
-                        sender.send(true).unwrap();
-                    }
-                })),
-            };
+            let callback: ReplicatorChangeListener = Box::new(move |_, status| {
+                if status.activity == ReplicatorActivityLevel::Stopped {
+                    sender.send(true).unwrap();
+                }
+            });
             let a = CBLReplicator_AddChangeListener(
                 self.get_ref(),
                 Some(c_replicator_change_listener),
-                std::mem::transmute(&c),
+                std::mem::transmute(&callback),
             );
             CBLReplicator_Stop(self.get_ref());
             receiver.recv().unwrap();
@@ -688,11 +686,6 @@ impl From<CBLReplicatorStatus> for ReplicatorStatus {
             error: check_error(&status.error),
         }
     }
-}
-
-#[derive(Default)]
-pub struct C {
-    pub c: Option<ReplicatorChangeListener>,
 }
 
 /** A callback that notifies you when the replicator's status changes. */
