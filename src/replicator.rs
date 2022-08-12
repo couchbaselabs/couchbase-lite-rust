@@ -512,7 +512,7 @@ impl Replicator {
 
             let cbl_config = CBLReplicatorConfiguration {
                 database: retain(config.database.get_ref()),
-                endpoint: retain(config.endpoint.get_ref()),
+                endpoint: config.endpoint.get_ref(),
                 replicatorType: config.replicator_type.clone().into(),
                 continuous: config.continuous,
                 disableAutoPurge: config.disable_auto_purge,
