@@ -20,7 +20,7 @@
 use std::{
     ptr,
     collections::{HashMap, HashSet},
-    sync::{mpsc::channel, Arc},
+    sync::mpsc::channel,
     time::Duration,
 };
 use crate::{
@@ -817,14 +817,15 @@ impl Replicator {
         listener: ReplicatorChangeListener,
     ) -> Listener<ReplicatorChangeListener> {
         unsafe {
-            let callback = Arc::new(listener);
+            let listener = Box::new(listener);
+            let ptr = Box::into_raw(listener);
             Listener::new(
                 ListenerToken::new(CBLReplicator_AddChangeListener(
                     self.get_ref(),
                     Some(c_replicator_change_listener),
-                    Arc::into_raw(callback.clone()) as *mut _,
+                    ptr as *mut _,
                 )),
-                callback,
+                Box::from_raw(ptr),
             )
         }
     }
@@ -836,14 +837,16 @@ impl Replicator {
         listener: ReplicatedDocumentListener,
     ) -> Listener<ReplicatedDocumentListener> {
         unsafe {
-            let callback = Arc::new(listener);
+            let listener = Box::new(listener);
+            let ptr = Box::into_raw(listener);
+
             Listener::new(
                 ListenerToken::new(CBLReplicator_AddDocumentReplicationListener(
                     self.get_ref(),
                     Some(c_replicator_document_change_listener),
-                    Arc::into_raw(callback.clone()) as *mut _,
+                    ptr as *mut _,
                 )),
-                callback,
+                Box::from_raw(ptr),
             )
         }
     }

@@ -30,11 +30,11 @@ use crate::{
         kCBLEncryptionNone, kCBLMaintenanceTypeFullOptimize, kCBLMaintenanceTypeIntegrityCheck,
         kCBLMaintenanceTypeOptimize, kCBLMaintenanceTypeReindex,
     },
+    Listener,
 };
 
 use std::{
     path::{Path, PathBuf},
-    sync::Arc,
 };
 use std::ptr;
 
@@ -287,17 +287,21 @@ impl Database {
     documents are changed on disk. Remember to keep the reference to the ChangeListener
     if you want the callback to keep working. */
     #[must_use]
-    pub fn add_listener(&mut self, listener: ChangeListener) -> ListenerToken {
+    pub fn add_listener(&mut self, listener: ChangeListener) -> Listener<ChangeListener> {
         unsafe {
-            let callback: Arc<ChangeListener> = Arc::new(listener);
+            let listener = Box::new(listener);
+            let ptr = Box::into_raw(listener);
 
-            ListenerToken {
-                cbl_ref: CBLDatabase_AddChangeListener(
-                    self.cbl_ref,
-                    Some(c_database_change_listener),
-                    Arc::into_raw(callback.clone()) as *mut _,
-                ),
-            }
+            Listener::new(
+                ListenerToken {
+                    cbl_ref: CBLDatabase_AddChangeListener(
+                        self.cbl_ref,
+                        Some(c_database_change_listener),
+                        ptr as *mut _,
+                    ),
+                },
+                Box::from_raw(ptr),
+            )
         }
     }
 

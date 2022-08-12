@@ -48,8 +48,6 @@ pub mod slice;
 
 mod c_api;
 
-use std::sync::Arc;
-
 use self::c_api::{
     CBLListenerToken, CBLRefCounted, CBL_DumpInstances, CBL_InstanceCount, CBL_Release, CBL_Retain,
     CBLListener_Remove,
@@ -79,11 +77,11 @@ pub struct Timestamp(pub i64);
 
 pub struct Listener<T> {
     pub listener_token: ListenerToken,
-    pub listener: Arc<T>,
+    pub listener: T,
 }
 
 impl<T> Listener<T> {
-    pub fn new(listener_token: ListenerToken, listener: Arc<T>) -> Self {
+    pub fn new(listener_token: ListenerToken, listener: T) -> Self {
         Self {
             listener_token,
             listener,

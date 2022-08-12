@@ -15,8 +15,6 @@
 // limitations under the License.
 //
 
-use std::sync::Arc;
-
 use crate::{
     c_api::{
         CBLDatabase, CBLDatabase_AddDocumentChangeListener, CBLDatabase_DeleteDocument,
@@ -259,15 +257,16 @@ impl Database {
         listener: ChangeListener,
     ) -> Listener<ChangeListener> {
         unsafe {
-            let callback: Arc<ChangeListener> = Arc::new(listener);
+            let listener = Box::new(listener);
+            let ptr = Box::into_raw(listener);
             Listener::new(
                 ListenerToken::new(CBLDatabase_AddDocumentChangeListener(
                     self.get_ref(),
                     CBLDocument_ID(document.get_ref()),
                     Some(c_document_change_listener),
-                    Arc::into_raw(callback.clone()) as *mut _,
+                    ptr as *mut _,
                 )),
-                callback,
+                Box::from_raw(ptr),
             )
         }
     }
