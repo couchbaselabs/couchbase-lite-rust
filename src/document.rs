@@ -264,7 +264,7 @@ impl Database {
                     self.get_ref(),
                     CBLDocument_ID(document.get_ref()),
                     Some(c_document_change_listener),
-                    ptr as *mut _,
+                    ptr.cast(),
                 )),
                 Box::from_raw(ptr),
             )

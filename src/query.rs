@@ -48,7 +48,7 @@ unsafe extern "C" fn c_query_change_listener(
     token: *mut CBLListenerToken,
 ) {
     let callback = context as *const ChangeListener;
-    let query = Query::wrap(query as *mut CBLQuery);
+    let query = Query::wrap(query.cast::<CBLQuery>());
     let token = ListenerToken::new(token);
 
     (*callback)(&query, &token);
@@ -184,7 +184,7 @@ impl Query {
                 ListenerToken::new(CBLQuery_AddChangeListener(
                     self.get_ref(),
                     Some(c_query_change_listener),
-                    ptr as *mut _,
+                    ptr.cast(),
                 )),
                 Box::from_raw(ptr),
             )

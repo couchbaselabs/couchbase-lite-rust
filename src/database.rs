@@ -32,10 +32,7 @@ use crate::{
     },
     Listener,
 };
-
-use std::{
-    path::{Path, PathBuf},
-};
+use std::path::{Path, PathBuf};
 use std::ptr;
 
 #[derive(Debug, Clone)]
@@ -44,19 +41,19 @@ pub struct EncryptionKey {
 }
 
 impl EncryptionKey {
-    pub fn new_from_password(password: String) -> Option<Self> {
+    pub fn new_from_password(password: &str) -> Option<Self> {
         unsafe {
             let key = CBLEncryptionKey {
                 algorithm: kCBLEncryptionNone,
                 bytes: [0; 32],
             };
-            let encryption_key = EncryptionKey {
+            let encryption_key = Self {
                 cbl_ref: Box::new(key),
             };
 
             if CBLEncryptionKey_FromPassword(
                 encryption_key.get_ref() as *mut CBLEncryptionKey,
-                from_str(password.as_str()).get_ref(),
+                from_str(password).get_ref(),
             ) {
                 Some(encryption_key)
             } else {
@@ -69,7 +66,7 @@ impl EncryptionKey {
 impl CblRef for EncryptionKey {
     type Output = *const CBLEncryptionKey;
     fn get_ref(&self) -> Self::Output {
-        &*self.cbl_ref as *const CBLEncryptionKey
+        std::ptr::addr_of!(*self.cbl_ref)
     }
 }
 
@@ -256,7 +253,7 @@ impl Database {
     }
 
     /** Encrypts or decrypts a database, or changes its encryption key. */
-    pub fn change_encryption_key(&mut self, encryption_key: EncryptionKey) -> Result<()> {
+    pub fn change_encryption_key(&mut self, encryption_key: &EncryptionKey) -> Result<()> {
         unsafe {
             check_bool(|error| {
                 CBLDatabase_ChangeEncryptionKey(self.get_ref(), encryption_key.get_ref(), error)
@@ -297,7 +294,7 @@ impl Database {
                     cbl_ref: CBLDatabase_AddChangeListener(
                         self.cbl_ref,
                         Some(c_database_change_listener),
-                        ptr as *mut _,
+                        ptr.cast(),
                     ),
                 },
                 Box::from_raw(ptr),

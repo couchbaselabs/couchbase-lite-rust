@@ -159,6 +159,7 @@ fn main() {
     setup();
 }
 
+/// # Panics
 pub fn setup() {
     let lib_path = PathBuf::from(format!(
         "{}/libcblite-3.0.1/lib/",

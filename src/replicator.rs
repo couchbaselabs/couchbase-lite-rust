@@ -257,7 +257,7 @@ impl ProxySettings {
 impl CblRef for ProxySettings {
     type Output = *const CBLProxySettings;
     fn get_ref(&self) -> Self::Output {
-        &self.cbl as *const _
+        std::ptr::addr_of!(self.cbl)
     }
 }
 
@@ -522,12 +522,11 @@ impl Replicator {
                 authenticator: config
                     .authenticator
                     .as_ref()
-                    .map_or(ptr::null_mut(), |a| a.get_ref()),
+                    .map_or(ptr::null_mut(), CblRef::get_ref),
                 proxy: config
                     .proxy
                     .as_ref()
-                    .map(|proxy| proxy.get_ref())
-                    .unwrap_or(ptr::null_mut()),
+                    .map_or(ptr::null_mut(), CblRef::get_ref),
                 headers: headers.as_dict().get_ref(),
                 pinnedServerCertificate: config
                     .pinned_server_certificate
@@ -559,8 +558,7 @@ impl Replicator {
                     .property_decryptor
                     .as_ref()
                     .and(Some(c_property_decryptor)),
-                context: &*context as *const ReplicationConfigurationContext
-                    as *mut std::ffi::c_void,
+                context: std::ptr::addr_of!(*context) as *mut _,
             };
 
             let mut error = CBLError::default();
@@ -709,7 +707,7 @@ unsafe extern "C" fn c_replicator_change_listener(
         context: None,
     };
     let status: ReplicatorStatus = (*status).into();
-    (*callback)(&replicator, status)
+    (*callback)(&replicator, status);
 }
 
 /** A callback that notifies you when documents are replicated. */
@@ -823,7 +821,7 @@ impl Replicator {
                 ListenerToken::new(CBLReplicator_AddChangeListener(
                     self.get_ref(),
                     Some(c_replicator_change_listener),
-                    ptr as *mut _,
+                    ptr.cast(),
                 )),
                 Box::from_raw(ptr),
             )
@@ -844,7 +842,7 @@ impl Replicator {
                 ListenerToken::new(CBLReplicator_AddDocumentReplicationListener(
                     self.get_ref(),
                     Some(c_replicator_document_change_listener),
-                    ptr as *mut _,
+                    ptr.cast(),
                 )),
                 Box::from_raw(ptr),
             )
