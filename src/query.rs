@@ -27,9 +27,10 @@ use crate::{
         CBLResultSet_ValueForKey, CBLListenerToken, CBLQuery_AddChangeListener,
         CBLQuery_CopyCurrentResults,
     },
+    Listener,
 };
 
-use std::{os::raw::c_uint, sync::Arc};
+use std::{os::raw::c_uint};
 use ListenerToken;
 
 /** Query languages. */
@@ -174,15 +175,19 @@ impl Query {
     the listener(s) of the results when ready. After that, it will run in the background after
     the database changes, and only notify the listeners when the result set changes. */
     #[must_use]
-    pub fn add_listener(&mut self, listener: ChangeListener) -> ListenerToken {
+    pub fn add_listener(&mut self, listener: ChangeListener) -> Listener<ChangeListener> {
         unsafe {
-            let callback = Arc::new(listener);
+            let listener = Box::new(listener);
+            let ptr = Box::into_raw(listener);
 
-            ListenerToken::new(CBLQuery_AddChangeListener(
-                self.get_ref(),
-                Some(c_query_change_listener),
-                Arc::into_raw(callback.clone()) as *mut _,
-            ))
+            Listener::new(
+                ListenerToken::new(CBLQuery_AddChangeListener(
+                    self.get_ref(),
+                    Some(c_query_change_listener),
+                    ptr as *mut _,
+                )),
+                Box::from_raw(ptr),
+            )
         }
     }
 
