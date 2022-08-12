@@ -29,7 +29,7 @@ use crate::{
     },
 };
 
-use std::os::raw::c_uint;
+use std::{os::raw::c_uint, sync::Arc};
 use ListenerToken;
 
 /** Query languages. */
@@ -46,11 +46,11 @@ unsafe extern "C" fn c_query_change_listener(
     query: *mut CBLQuery,
     token: *mut CBLListenerToken,
 ) {
-    let callback: Box<ChangeListener> = Box::from_raw(context as *mut _);
+    let callback = context as *const ChangeListener;
     let query = Query::wrap(query as *mut CBLQuery);
     let token = ListenerToken::new(token);
 
-    callback(&query, &token);
+    (*callback)(&query, &token);
 }
 
 /** A compiled database query. */
@@ -173,14 +173,15 @@ impl Query {
     When the first change listener is added, the query will run (in the background) and notify
     the listener(s) of the results when ready. After that, it will run in the background after
     the database changes, and only notify the listeners when the result set changes. */
+    #[must_use]
     pub fn add_listener(&mut self, listener: ChangeListener) -> ListenerToken {
         unsafe {
-            let callback: Box<ChangeListener> = Box::new(Box::new(listener));
+            let callback = Arc::new(listener);
 
             ListenerToken::new(CBLQuery_AddChangeListener(
                 self.get_ref(),
                 Some(c_query_change_listener),
-                Box::into_raw(callback) as *mut _,
+                Arc::into_raw(callback.clone()) as *mut _,
             ))
         }
     }

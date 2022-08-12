@@ -166,8 +166,8 @@ pub fn with_three_dbs<F>(
     );
 
     // Clean up
-    repl1.stop();
-    repl2.stop();
+    assert!(repl1.stop());
+    assert!(repl2.stop());
 
     local_db1.delete().unwrap();
     local_db2.delete().unwrap();

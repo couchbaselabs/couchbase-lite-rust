@@ -32,7 +32,10 @@ use crate::{
     },
 };
 
-use std::path::{Path, PathBuf};
+use std::{
+    path::{Path, PathBuf},
+    sync::Arc,
+};
 use std::ptr;
 
 #[derive(Debug, Clone)]
@@ -98,7 +101,7 @@ unsafe extern "C" fn c_database_change_listener(
     num_docs: ::std::os::raw::c_uint,
     c_doc_ids: *mut FLString,
 ) {
-    let callback: Box<ChangeListener> = Box::from_raw(context as *mut _);
+    let callback = context as *const ChangeListener;
     let database = Database::retain(db as *mut CBLDatabase);
 
     let doc_ids = std::slice::from_raw_parts(c_doc_ids, num_docs as usize)
@@ -106,7 +109,7 @@ unsafe extern "C" fn c_database_change_listener(
         .filter_map(|doc_id| doc_id.to_string())
         .collect();
 
-    callback(&database, doc_ids);
+    (*callback)(&database, doc_ids);
 }
 
 /** Callback indicating that the database (or an object belonging to it) is ready to call one or more listeners. */
@@ -283,15 +286,16 @@ impl Database {
     /** Registers a database change listener function. It will be called after one or more
     documents are changed on disk. Remember to keep the reference to the ChangeListener
     if you want the callback to keep working. */
+    #[must_use]
     pub fn add_listener(&mut self, listener: ChangeListener) -> ListenerToken {
         unsafe {
-            let callback: Box<ChangeListener> = Box::new(Box::new(listener));
+            let callback: Arc<ChangeListener> = Arc::new(listener);
 
             ListenerToken {
                 cbl_ref: CBLDatabase_AddChangeListener(
                     self.cbl_ref,
                     Some(c_database_change_listener),
-                    Box::into_raw(callback) as *mut _,
+                    Arc::into_raw(callback.clone()) as *mut _,
                 ),
             }
         }

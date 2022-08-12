@@ -15,6 +15,8 @@
 // limitations under the License.
 //
 
+use std::sync::Arc;
+
 use crate::{
     c_api::{
         CBLDatabase, CBLDatabase_AddDocumentChangeListener, CBLDatabase_DeleteDocument,
@@ -30,7 +32,7 @@ use crate::{
     },
     slice::from_str,
     CblRef, CouchbaseLiteError, Database, Dict, Error, ListenerToken, MutableDict, Result,
-    Timestamp, check_bool, check_failure, failure, release, retain,
+    Timestamp, check_bool, check_failure, failure, release, retain, Listener,
 };
 
 /** An in-memory copy of a document. */
@@ -81,9 +83,9 @@ unsafe extern "C" fn c_document_change_listener(
     db: *const CBLDatabase,
     c_doc_id: FLString,
 ) {
-    let callback: Box<ChangeListener> = Box::from_raw(context as *mut _);
+    let callback = context as *const ChangeListener;
     let database = Database::retain(db as *mut CBLDatabase);
-    callback(&database, c_doc_id.to_string());
+    (*callback)(&database, c_doc_id.to_string());
 }
 
 //////// DATABASE'S DOCUMENT API:
@@ -250,19 +252,23 @@ impl Database {
 
     /** Registers a document change listener callback. It will be called after a specific document
     is changed on disk. */
+    #[must_use]
     pub fn add_document_change_listener(
         &self,
         document: &Document,
         listener: ChangeListener,
-    ) -> ListenerToken {
+    ) -> Listener<ChangeListener> {
         unsafe {
-            let callback: Box<ChangeListener> = Box::new(Box::new(listener));
-            ListenerToken::new(CBLDatabase_AddDocumentChangeListener(
-                self.get_ref(),
-                CBLDocument_ID(document.get_ref()),
-                Some(c_document_change_listener),
-                Box::into_raw(callback) as *mut _,
-            ))
+            let callback: Arc<ChangeListener> = Arc::new(listener);
+            Listener::new(
+                ListenerToken::new(CBLDatabase_AddDocumentChangeListener(
+                    self.get_ref(),
+                    CBLDocument_ID(document.get_ref()),
+                    Some(c_document_change_listener),
+                    Arc::into_raw(callback.clone()) as *mut _,
+                )),
+                callback,
+            )
         }
     }
 }

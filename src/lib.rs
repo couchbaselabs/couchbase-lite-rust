@@ -48,8 +48,11 @@ pub mod slice;
 
 mod c_api;
 
+use std::sync::Arc;
+
 use self::c_api::{
     CBLListenerToken, CBLRefCounted, CBL_DumpInstances, CBL_InstanceCount, CBL_Release, CBL_Retain,
+    CBLListener_Remove,
 };
 
 //////// RE-EXPORT:
@@ -74,6 +77,20 @@ pub trait CblRef {
 /// A time value for document expiration. Defined as milliseconds since the Unix epoch (1/1/1970.)
 pub struct Timestamp(pub i64);
 
+pub struct Listener<T> {
+    pub listener_token: ListenerToken,
+    pub listener: Arc<T>,
+}
+
+impl<T> Listener<T> {
+    pub fn new(listener_token: ListenerToken, listener: Arc<T>) -> Self {
+        Self {
+            listener_token,
+            listener,
+        }
+    }
+}
+
 /// An opaque token representing a registered listener.
 /// When this object is dropped, the listener function will not be called again.
 pub struct ListenerToken {
@@ -95,7 +112,7 @@ impl CblRef for ListenerToken {
 
 impl Drop for ListenerToken {
     fn drop(&mut self) {
-        // unsafe { CBLListener_Remove(self.get_ref()) }
+        unsafe { CBLListener_Remove(self.get_ref()) }
     }
 }
 

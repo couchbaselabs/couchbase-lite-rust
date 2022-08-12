@@ -20,7 +20,8 @@
 use std::{
     ptr,
     collections::{HashMap, HashSet},
-    sync::mpsc::channel,
+    sync::{mpsc::channel, Arc},
+    time::Duration,
 };
 use crate::{
     CblRef, Database, Dict, Document, Error, ListenerToken, MutableDict, Result, check_error,
@@ -40,7 +41,7 @@ use crate::{
         kCBLReplicatorConnecting, kCBLReplicatorIdle, kCBLReplicatorOffline, kCBLReplicatorStopped,
         kCBLReplicatorTypePull, kCBLReplicatorTypePush, kCBLReplicatorTypePushAndPull,
     },
-    MutableArray,
+    MutableArray, Listener,
 };
 
 // WARNING: THIS API IS UNIMPLEMENTED SO FAR
@@ -584,7 +585,7 @@ impl Replicator {
     /** Stops a running replicator, asynchronously. Does nothing if it's not already started.
     The replicator will call your \ref CBLReplicatorChangeListener with an activity level of
     \ref kCBLReplicatorStopped after it stops. Until then, consider it still active. */
-    pub fn stop(&mut self) {
+    pub fn stop(&mut self) -> bool {
         unsafe {
             let (sender, receiver) = channel();
             let callback: ReplicatorChangeListener = Box::new(move |_, status| {
@@ -592,14 +593,17 @@ impl Replicator {
                     sender.send(true).unwrap();
                 }
             });
-            let a = CBLReplicator_AddChangeListener(
+
+            let token = CBLReplicator_AddChangeListener(
                 self.get_ref(),
                 Some(c_replicator_change_listener),
                 std::mem::transmute(&callback),
             );
+
             CBLReplicator_Stop(self.get_ref());
-            receiver.recv().unwrap();
-            CBLListener_Remove(a);
+            let success = receiver.recv_timeout(Duration::from_secs(10)).is_ok();
+            CBLListener_Remove(token);
+            success
         }
     }
 
@@ -709,7 +713,7 @@ unsafe extern "C" fn c_replicator_change_listener(
 }
 
 /** A callback that notifies you when documents are replicated. */
-pub type ReplicatedDocumentListener = fn(&Replicator, Direction, Vec<ReplicatedDocument>);
+pub type ReplicatedDocumentListener = Box<dyn Fn(&Replicator, Direction, Vec<ReplicatedDocument>)>;
 unsafe extern "C" fn c_replicator_document_change_listener(
     context: *mut ::std::os::raw::c_void,
     replicator: *mut CBLReplicator,
@@ -717,7 +721,7 @@ unsafe extern "C" fn c_replicator_document_change_listener(
     num_documents: u32,
     documents: *const CBLReplicatedDocument,
 ) {
-    let callback: ReplicatedDocumentListener = std::mem::transmute(context);
+    let callback = context as *const ReplicatedDocumentListener;
 
     let replicator = Replicator {
         cbl_ref: retain(replicator),
@@ -742,7 +746,7 @@ unsafe extern "C" fn c_replicator_document_change_listener(
         })
         .collect();
 
-    callback(&replicator, direction, repl_documents);
+    (*callback)(&replicator, direction, repl_documents);
 }
 
 /** Flags describing a replicated document. */
@@ -807,26 +811,40 @@ impl Replicator {
     }
 
     /** Adds a listener that will be called when the replicator's status changes. */
-    pub fn add_change_listener(&mut self, listener: ReplicatorChangeListener) -> ListenerToken {
+    #[must_use]
+    pub fn add_change_listener(
+        &mut self,
+        listener: ReplicatorChangeListener,
+    ) -> Listener<ReplicatorChangeListener> {
         unsafe {
-            let callback = Box::new(Box::new(listener));
-            ListenerToken::new(CBLReplicator_AddChangeListener(
-                self.get_ref(),
-                Some(c_replicator_change_listener),
-                Box::into_raw(callback) as *mut _,
-            ))
+            let callback = Arc::new(listener);
+            Listener::new(
+                ListenerToken::new(CBLReplicator_AddChangeListener(
+                    self.get_ref(),
+                    Some(c_replicator_change_listener),
+                    Arc::into_raw(callback.clone()) as *mut _,
+                )),
+                callback,
+            )
         }
     }
 
     /** Adds a listener that will be called when documents are replicated. */
-    pub fn add_document_listener(&mut self, listener: ReplicatedDocumentListener) -> ListenerToken {
+    #[must_use]
+    pub fn add_document_listener(
+        &mut self,
+        listener: ReplicatedDocumentListener,
+    ) -> Listener<ReplicatedDocumentListener> {
         unsafe {
-            let callback = listener as *mut std::ffi::c_void;
-            ListenerToken::new(CBLReplicator_AddDocumentReplicationListener(
-                self.get_ref(),
-                Some(c_replicator_document_change_listener),
+            let callback = Arc::new(listener);
+            Listener::new(
+                ListenerToken::new(CBLReplicator_AddDocumentReplicationListener(
+                    self.get_ref(),
+                    Some(c_replicator_document_change_listener),
+                    Arc::into_raw(callback.clone()) as *mut _,
+                )),
                 callback,
-            ))
+            )
         }
     }
 }
