@@ -119,7 +119,7 @@ fn indexes() {
         assert!(db
             .create_index(
                 "new_index",
-                ValueIndexConfiguration::new(QueryLanguage::JSON, r#"[[".id"]]"#),
+                &ValueIndexConfiguration::new(QueryLanguage::JSON, r#"[[".id"]]"#),
             )
             .unwrap());
 
