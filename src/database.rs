@@ -281,8 +281,14 @@ impl Database {
     //////// NOTIFICATIONS:
 
     /** Registers a database change listener function. It will be called after one or more
-    documents are changed on disk. Remember to keep the reference to the ChangeListener
-    if you want the callback to keep working. */
+        documents are changed on disk. Remember to keep the reference to the ChangeListener
+        if you want the callback to keep working.
+
+        # Lifetime
+
+        The listener is deleted at the end of life of the `Listener` object.
+        You must keep the `Listener` object as long as you need it.
+    */
     #[must_use]
     pub fn add_listener(&mut self, listener: ChangeListener) -> Listener<ChangeListener> {
         unsafe {

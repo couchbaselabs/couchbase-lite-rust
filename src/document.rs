@@ -249,7 +249,14 @@ impl Database {
     }
 
     /** Registers a document change listener callback. It will be called after a specific document
-    is changed on disk. */
+    is changed on disk.
+
+
+    # Lifetime
+
+    The listener is deleted at the end of life of the Listener object.
+    You must keep the Listener object as long as you need it
+    */
     #[must_use]
     pub fn add_document_change_listener(
         &self,

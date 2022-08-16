@@ -24,6 +24,7 @@
 
 extern crate bindgen;
 
+use std::error::Error;
 use std::env;
 use std::fs;
 use std::path::PathBuf;
@@ -48,7 +49,7 @@ static DEFAULT_LIBCLANG_PATH: &str = "/usr/lib/";
 static STATIC_LINK_CBL: bool = false;
 static CBL_SRC_DIR: &str = "../../CBL_C";
 
-fn main() {
+fn main() -> Result<(), Box<dyn Error>> {
     // Set LIBCLANG_PATH environment variable if it's not already set:
     if env::var("LIBCLANG_PATH").is_err() {
         env::set_var("LIBCLANG_PATH", DEFAULT_LIBCLANG_PATH);
@@ -156,11 +157,12 @@ fn main() {
         env!("CARGO_MANIFEST_DIR")
     );
 
-    setup();
+    setup()?;
+
+    Ok(())
 }
 
-/// # Panics
-pub fn setup() {
+pub fn setup() -> Result<(), Box<dyn Error>> {
     let lib_path = PathBuf::from(format!(
         "{}/libcblite-3.0.1/lib/",
         env!("CARGO_MANIFEST_DIR")
@@ -171,81 +173,67 @@ pub fn setup() {
     std::fs::copy(
         lib_path.join("libcblite.so"),
         dest_path.join("libcblite.so"),
-    )
-    .unwrap();
+    )?;
     std::fs::copy(
         lib_path.join("libcblite.so.3"),
         dest_path.join("libcblite.so.3"),
-    )
-    .unwrap();
+    )?;
     std::fs::copy(
         lib_path.join("libcblite.so.3.0.1"),
         dest_path.join("libcblite.so.3.0.1"),
-    )
-    .unwrap();
+    )?;
     std::fs::copy(
         lib_path.join("libcblite.so.sym"),
         dest_path.join("libcblite.so.sym"),
-    )
-    .unwrap();
+    )?;
     std::fs::copy(
         lib_path.join("libicudata.so.63"),
         dest_path.join("libicudata.so.63"),
-    )
-    .unwrap();
+    )?;
     std::fs::copy(
         lib_path.join("libicudata.so.63.1"),
         dest_path.join("libicudata.so.63.1"),
-    )
-    .unwrap();
+    )?;
     std::fs::copy(
         lib_path.join("libicui18n.so.63"),
         dest_path.join("libicui18n.so.63"),
-    )
-    .unwrap();
+    )?;
     std::fs::copy(
         lib_path.join("libicui18n.so.63.1"),
         dest_path.join("libicui18n.so.63.1"),
-    )
-    .unwrap();
+    )?;
     std::fs::copy(
         lib_path.join("libicuio.so.63"),
         dest_path.join("libicuio.so.63"),
-    )
-    .unwrap();
+    )?;
     std::fs::copy(
         lib_path.join("libicuio.so.63.1"),
         dest_path.join("libicuio.so.63.1"),
-    )
-    .unwrap();
+    )?;
     std::fs::copy(
         lib_path.join("libicutest.so.63"),
         dest_path.join("libicutest.so.63"),
-    )
-    .unwrap();
+    )?;
     std::fs::copy(
         lib_path.join("libicutest.so.63.1"),
         dest_path.join("libicutest.so.63.1"),
-    )
-    .unwrap();
+    )?;
     std::fs::copy(
         lib_path.join("libicutu.so.63"),
         dest_path.join("libicutu.so.63"),
-    )
-    .unwrap();
+    )?;
     std::fs::copy(
         lib_path.join("libicutu.so.63.1"),
         dest_path.join("libicutu.so.63.1"),
-    )
-    .unwrap();
+    )?;
     std::fs::copy(
         lib_path.join("libicuuc.so.63"),
         dest_path.join("libicuuc.so.63"),
-    )
-    .unwrap();
+    )?;
     std::fs::copy(
         lib_path.join("libicuuc.so.63.1"),
         dest_path.join("libicuuc.so.63.1"),
-    )
-    .unwrap();
+    )?;
+
+    Ok(())
 }

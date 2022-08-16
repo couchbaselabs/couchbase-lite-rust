@@ -173,7 +173,13 @@ impl Query {
 
     When the first change listener is added, the query will run (in the background) and notify
     the listener(s) of the results when ready. After that, it will run in the background after
-    the database changes, and only notify the listeners when the result set changes. */
+    the database changes, and only notify the listeners when the result set changes.
+
+    # Lifetime
+
+    The listener is deleted at the end of life of the `Listener` object.
+    You must keep the `Listener` object as long as you need it.
+    */
     #[must_use]
     pub fn add_listener(&mut self, listener: ChangeListener) -> Listener<ChangeListener> {
         unsafe {
