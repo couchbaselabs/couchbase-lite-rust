@@ -23,51 +23,29 @@
 // - https://doc.rust-lang.org/cargo/reference/build-scripts.html
 
 extern crate bindgen;
+extern crate fs_extra;
 
-use std::error::Error;
 use std::env;
+use std::error::Error;
 use std::fs;
 use std::path::PathBuf;
+use fs_extra::dir;
 
-// Where to find the Couchbase Lite headers and library:    //TODO: Make this easily configurable
-static CBL_INCLUDE_DIR: &str = "libcblite-3.0.1/include";
-static CBL_LIB_DIR: &str = "libcblite-3.0.1/lib";
-
-#[cfg(target_os = "macos")]
-static CBL_LIB_FILENAME: &str = "libcblite.dylib";
-
-#[cfg(target_os = "linux")]
-static CBL_LIB_FILENAME: &str = "libcblite.so";
-
-// Where to find Clang and LLVM libraries:
-#[cfg(target_os = "macos")]
-static DEFAULT_LIBCLANG_PATH: &str = "/usr/local/Cellar/llvm/12.0.1/lib";
-
-#[cfg(target_os = "linux")]
-static DEFAULT_LIBCLANG_PATH: &str = "/usr/lib/";
-
-static STATIC_LINK_CBL: bool = false;
-static CBL_SRC_DIR: &str = "../../CBL_C";
+static CBL_INCLUDE_DIR: &str = "libcblite-3.0.2/include";
+static CBL_LIB_DIR: &str = "libcblite-3.0.2/lib";
 
 fn main() -> Result<(), Box<dyn Error>> {
-    // Set LIBCLANG_PATH environment variable if it's not already set:
-    if env::var("LIBCLANG_PATH").is_err() {
-        env::set_var("LIBCLANG_PATH", DEFAULT_LIBCLANG_PATH);
-        println!("cargo:rustc-env=LIBCLANG_PATH={}", DEFAULT_LIBCLANG_PATH);
-    }
+    generate_bindings()?;
+    configure_rustc()?;
+    copy_lib()?;
 
-    let sdk_root = "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX12.3.sdk";
+    Ok(())
+}
 
-    // The bindgen::Builder is the main entry point
-    // to bindgen, and lets you build up options for
-    // the resulting bindings.
+fn generate_bindings() -> Result<(), Box<dyn Error>> {
     let bindings = bindgen::Builder::default()
-        // The input header we would like to generate bindings for.
         .header("src/wrapper.h")
-        //.header("libcblite-3.0.1/include/cbl/CouchbaseLite.h")
-        // C '#include' search paths:
         .clang_arg(format!("-I{}", CBL_INCLUDE_DIR))
-        // Which symbols to generate bindings for:
         .whitelist_type("CBL.*")
         .whitelist_type("FL.*")
         .whitelist_var("k?CBL.*")
@@ -75,165 +53,122 @@ fn main() -> Result<(), Box<dyn Error>> {
         .whitelist_function("CBL.*")
         .whitelist_function("_?FL.*")
         .no_copy("FLSliceResult")
-        .clang_arg(format!("-isysroot{}", sdk_root))
-        // Tell cargo to invalidate the built crate whenever any of the
-        // included header files changed.
+        .size_t_is_usize(true)
         .parse_callbacks(Box::new(bindgen::CargoCallbacks))
-        // Finish the builder and generate the bindings.
         .generate()
-        // Unwrap the Result and panic on failure.
         .expect("Unable to generate bindings");
 
-    // Write the bindings to the $OUT_DIR/bindings.rs file.
-    let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
+    let out_dir = env::var("OUT_DIR")?;
     bindings
-        .write_to_file(out_dir.join("bindings.rs"))
+        .write_to_file(PathBuf::from(out_dir).join("bindings.rs"))
         .expect("Couldn't write bindings!");
-
-    // Tell cargo to tell rustc to link the cblite library.
-    if STATIC_LINK_CBL {
-        // Link against the CBL-C and LiteCore static libraries for maximal efficienty.
-        // This assumes that a checkout of couchbase-lite-C exists at CBL_SRC_DIR
-        // and has been built with CMake.
-        // TODO: Currently, on Mac OS this requires manual processing of the static libraries
-        //       because Rust can't link with fat libraries. Thus all the libraries linked below
-        //       had to be thinned with e.g. `libXXX.a -thin x86_64 -output libXXX-x86.a`.
-        let cblite_src_path = PathBuf::from(CBL_SRC_DIR);
-        let root = cblite_src_path.to_str().unwrap();
-
-        println!("cargo:rustc-link-search={}/build_cmake", root);
-        println!(
-            "cargo:rustc-link-search={}/build_cmake/vendor/couchbase-lite-core",
-            root
-        );
-        println!(
-            "cargo:rustc-link-search={}/build_cmake/vendor/couchbase-lite-core/Networking/BLIP",
-            root
-        );
-        println!(
-            "cargo:rustc-link-search={}/build_cmake/vendor/couchbase-lite-core/vendor/fleece",
-            root
-        );
-        println!("cargo:rustc-link-search={}/build_cmake/vendor/couchbase-lite-core/vendor/mbedtls/library", root);
-        println!("cargo:rustc-link-search={}/build_cmake/vendor/couchbase-lite-core/vendor/mbedtls/crypto/library", root);
-        println!("cargo:rustc-link-search={}/build_cmake/vendor/couchbase-lite-core/vendor/sqlite3-unicodesn", root);
-
-        println!("cargo:rustc-link-lib=static=cblite-static-x86");
-        println!("cargo:rustc-link-lib=static=liteCoreStatic-x86");
-        println!("cargo:rustc-link-lib=static=liteCoreWebSocket-x86");
-        println!("cargo:rustc-link-lib=static=BLIPStatic-x86");
-        println!("cargo:rustc-link-lib=static=FleeceStatic-x86");
-        println!("cargo:rustc-link-lib=static=CouchbaseSqlite3-x86");
-        println!("cargo:rustc-link-lib=static=SQLite3_UnicodeSN-x86");
-        println!("cargo:rustc-link-lib=static=mbedcrypto-x86");
-        println!("cargo:rustc-link-lib=static=mbedtls-x86");
-        println!("cargo:rustc-link-lib=static=mbedx509-x86");
-
-        println!("cargo:rustc-link-lib=c++");
-        println!("cargo:rustc-link-lib=z");
-
-        // TODO: This only applies to Apple platforms:
-        println!("cargo:rustc-link-lib=framework=CoreFoundation");
-        println!("cargo:rustc-link-lib=framework=Foundation");
-        println!("cargo:rustc-link-lib=framework=CFNetwork");
-        println!("cargo:rustc-link-lib=framework=Security");
-        println!("cargo:rustc-link-lib=framework=SystemConfiguration");
-    } else {
-        // Link against and copy the CBL dynamic library:
-        let src = PathBuf::from(CBL_LIB_DIR).join(CBL_LIB_FILENAME);
-        let dst = out_dir.join(CBL_LIB_FILENAME);
-        println!("cargo:rerun-if-changed={}", src.to_str().unwrap());
-        fs::copy(src, dst).expect("copy dylib");
-        // Tell rustc to link it:
-        println!("cargo:rustc-link-search={}", out_dir.to_str().unwrap());
-        println!("cargo:rustc-link-lib=dylib=cblite");
-    }
-
-    // Tell cargo to invalidate the built crate whenever the wrapper changes
-    println!("cargo:rerun-if-changed=src/wrapper.h");
-
-    println!(
-        "cargo:rustc-link-search={}/libcblite-3.0.1/lib",
-        env!("CARGO_MANIFEST_DIR")
-    );
-
-    setup()?;
 
     Ok(())
 }
 
-pub fn setup() -> Result<(), Box<dyn Error>> {
+fn configure_rustc() -> Result<(), Box<dyn Error>> {
+    println!("cargo:rerun-if-changed=src/wrapper.h");
+    println!("cargo:rerun-if-changed={}", CBL_INCLUDE_DIR);
+    println!("cargo:rerun-if-changed={}", CBL_LIB_DIR);
+    let target_dir = env::var("TARGET")?;
+    println!(
+        "cargo:rustc-link-search={}/{}/{}",
+        env!("CARGO_MANIFEST_DIR"),
+        CBL_LIB_DIR,
+        target_dir
+    );
+    println!(
+        "cargo:rustc-link-search=framework={}/{}/{}/CouchbaseLite.xcframework/ios-arm64_armv7",
+        env!("CARGO_MANIFEST_DIR"),
+        CBL_LIB_DIR,
+        target_dir
+    );
+    println!("cargo:rustc-link-search={}", env::var("OUT_DIR")?);
+
+    let target_os = env::var("CARGO_CFG_TARGET_OS")?;
+    if target_os != "ios" {
+        println!("cargo:rustc-link-lib=dylib=cblite");
+    } else {
+        println!("cargo:rustc-link-lib=framework=CouchbaseLite");
+    }
+
+    Ok(())
+}
+
+pub fn copy_lib() -> Result<(), Box<dyn Error>> {
     let lib_path = PathBuf::from(format!(
-        "{}/libcblite-3.0.1/lib/",
-        env!("CARGO_MANIFEST_DIR")
+        "{}/{}/{}/",
+        env!("CARGO_MANIFEST_DIR"),
+        CBL_LIB_DIR,
+        env::var("TARGET").unwrap()
     ));
+    let dest_path = PathBuf::from(format!("{}/", env::var("OUT_DIR")?));
 
-    let dest_path = PathBuf::from(format!("{}/", std::env::var("OUT_DIR").unwrap()));
-
-    std::fs::copy(
-        lib_path.join("libcblite.so"),
-        dest_path.join("libcblite.so"),
-    )?;
-    std::fs::copy(
-        lib_path.join("libcblite.so.3"),
-        dest_path.join("libcblite.so.3"),
-    )?;
-    std::fs::copy(
-        lib_path.join("libcblite.so.3.0.1"),
-        dest_path.join("libcblite.so.3.0.1"),
-    )?;
-    std::fs::copy(
-        lib_path.join("libcblite.so.sym"),
-        dest_path.join("libcblite.so.sym"),
-    )?;
-    std::fs::copy(
-        lib_path.join("libicudata.so.63"),
-        dest_path.join("libicudata.so.63"),
-    )?;
-    std::fs::copy(
-        lib_path.join("libicudata.so.63.1"),
-        dest_path.join("libicudata.so.63.1"),
-    )?;
-    std::fs::copy(
-        lib_path.join("libicui18n.so.63"),
-        dest_path.join("libicui18n.so.63"),
-    )?;
-    std::fs::copy(
-        lib_path.join("libicui18n.so.63.1"),
-        dest_path.join("libicui18n.so.63.1"),
-    )?;
-    std::fs::copy(
-        lib_path.join("libicuio.so.63"),
-        dest_path.join("libicuio.so.63"),
-    )?;
-    std::fs::copy(
-        lib_path.join("libicuio.so.63.1"),
-        dest_path.join("libicuio.so.63.1"),
-    )?;
-    std::fs::copy(
-        lib_path.join("libicutest.so.63"),
-        dest_path.join("libicutest.so.63"),
-    )?;
-    std::fs::copy(
-        lib_path.join("libicutest.so.63.1"),
-        dest_path.join("libicutest.so.63.1"),
-    )?;
-    std::fs::copy(
-        lib_path.join("libicutu.so.63"),
-        dest_path.join("libicutu.so.63"),
-    )?;
-    std::fs::copy(
-        lib_path.join("libicutu.so.63.1"),
-        dest_path.join("libicutu.so.63.1"),
-    )?;
-    std::fs::copy(
-        lib_path.join("libicuuc.so.63"),
-        dest_path.join("libicuuc.so.63"),
-    )?;
-    std::fs::copy(
-        lib_path.join("libicuuc.so.63.1"),
-        dest_path.join("libicuuc.so.63.1"),
-    )?;
+    match env::var("CARGO_CFG_TARGET_OS").unwrap().as_str() {
+        "android" => {
+            fs::copy(
+                lib_path.join("libcblite.stripped.so"),
+                dest_path.join("libcblite.so"),
+            )?;
+        }
+        "ios" => {
+            dir::copy(
+                lib_path.join("CouchbaseLite.xcframework"),
+                dest_path,
+                &dir::CopyOptions::new(),
+            )?;
+        }
+        "linux" => {
+            fs::copy(
+                lib_path.join("libcblite.so.3"),
+                dest_path.join("libcblite.so.3"),
+            )?;
+            fs::copy(
+                lib_path.join("libicudata.so.66"),
+                dest_path.join("libicudata.so.66"),
+            )?;
+            fs::copy(
+                lib_path.join("libicui18n.so.66"),
+                dest_path.join("libicui18n.so.66"),
+            )?;
+            fs::copy(
+                lib_path.join("libicuio.so.66"),
+                dest_path.join("libicuio.so.66"),
+            )?;
+            fs::copy(
+                lib_path.join("libicutu.so.66"),
+                dest_path.join("libicutu.so.66"),
+            )?;
+            fs::copy(
+                lib_path.join("libicuuc.so.66"),
+                dest_path.join("libicuuc.so.66"),
+            )?;
+            // Needed only for build, not required for run
+            fs::copy(
+                lib_path.join("libcblite.so.3"),
+                dest_path.join("libcblite.so"),
+            )?;
+        }
+        "macos" => {
+            fs::copy(
+                lib_path.join("libcblite.3.dylib"),
+                dest_path.join("libcblite.3.dylib"),
+            )?;
+            // Needed only for build, not required for run
+            fs::copy(
+                lib_path.join("libcblite.3.dylib"),
+                dest_path.join("libcblite.dylib"),
+            )?;
+        }
+        "windows" => {
+            fs::copy(lib_path.join("cblite.dll"), dest_path.join("cblite.dll"))?;
+            // Needed only for build, not required for run
+            fs::copy(lib_path.join("cblite.lib"), dest_path.join("cblite.lib"))?;
+        }
+        _ => {
+            panic!("Unsupported target: {}", env::var("CARGO_CFG_TARGET_OS")?);
+        }
+    }
 
     Ok(())
 }

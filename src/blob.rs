@@ -174,7 +174,7 @@ impl<'r> std::io::Read for BlobReader<'r> {
                 CBLBlobReader_Read(
                     self.get_ref(),
                     buf.as_mut_ptr().cast::<c_void>(),
-                    buf.len() as u64,
+                    buf.len(),
                     err,
                 )
             })
@@ -229,7 +229,7 @@ impl<'r> std::io::Write for BlobWriter<'r> {
                 let ok = CBLBlobWriter_Write(
                     self.get_ref(),
                     data.as_ptr().cast::<c_void>(),
-                    data.len() as u64,
+                    data.len(),
                     err,
                 );
                 if ok {
