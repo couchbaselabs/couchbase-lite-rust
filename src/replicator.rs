@@ -382,7 +382,7 @@ pub extern "C" fn c_property_encryptor(
                 Err(_) => FLSliceResult_New(0),
             });
 
-        if !cbl_error.is_null() {
+        if error != Error::default() {
             *cbl_error = error.as_cbl_error();
         }
         result
@@ -435,7 +435,7 @@ pub extern "C" fn c_property_decryptor(
                 Err(_) => FLSliceResult_New(0),
             });
 
-        if !cbl_error.is_null() {
+        if error != Error::default() {
             *cbl_error = error.as_cbl_error();
         }
         result
