@@ -348,7 +348,7 @@ pub type PropertyEncryptor = fn(
     algorithm: Option<String>,
     kid: Option<String>,
     error: &Error,
-) -> Vec<u8>;
+) -> std::result::Result<Vec<u8>, Box<dyn std::error::Error>>;
 #[no_mangle]
 pub extern "C" fn c_property_encryptor(
     context: *mut ::std::os::raw::c_void,
@@ -377,8 +377,9 @@ pub extern "C" fn c_property_encryptor(
                     &error,
                 )
             })
-            .map_or(FLSliceResult_New(0), |v| {
-                FLSlice_Copy(from_bytes(&v[..]).get_ref())
+            .map_or(FLSliceResult_New(0), |v| match v {
+                Ok(v) => FLSlice_Copy(from_bytes(&v[..]).get_ref()),
+                Err(_) => FLSliceResult_New(0),
             });
 
         if !cbl_error.is_null() {
@@ -400,7 +401,7 @@ pub type PropertyDecryptor = fn(
     algorithm: Option<String>,
     kid: Option<String>,
     error: &Error,
-) -> Vec<u8>;
+) -> std::result::Result<Vec<u8>, Box<dyn std::error::Error>>;
 #[no_mangle]
 pub extern "C" fn c_property_decryptor(
     context: *mut ::std::os::raw::c_void,
@@ -429,8 +430,9 @@ pub extern "C" fn c_property_decryptor(
                     &error,
                 )
             })
-            .map_or(FLSliceResult_New(0), |v| {
-                FLSlice_Copy(from_bytes(&v[..]).get_ref())
+            .map_or(FLSliceResult_New(0), |v| match v {
+                Ok(v) => FLSlice_Copy(from_bytes(&v[..]).get_ref()),
+                Err(_) => FLSliceResult_New(0),
             });
 
         if !cbl_error.is_null() {

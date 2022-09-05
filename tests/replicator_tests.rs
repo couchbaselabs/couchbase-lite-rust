@@ -335,10 +335,10 @@ fn encryptor(
     _algorithm: Option<String>,
     _kid: Option<String>,
     _error: &Error,
-) -> Vec<u8> {
-    input
+) -> std::result::Result<Vec<u8>, Box<dyn std::error::Error>> {
+    Ok(input
         .map(|v| v.iter().map(|u| u ^ 48).collect())
-        .unwrap_or(vec![])
+        .unwrap_or(vec![]))
 }
 fn decryptor(
     _document_id: Option<String>,
@@ -348,10 +348,10 @@ fn decryptor(
     _algorithm: Option<String>,
     _kid: Option<String>,
     _error: &Error,
-) -> Vec<u8> {
-    input
+) -> std::result::Result<Vec<u8>, Box<dyn std::error::Error>> {
+    Ok(input
         .map(|v| v.iter().map(|u| u ^ 48).collect())
-        .unwrap_or(vec![])
+        .unwrap_or(vec![]))
 }
 
 #[test]
