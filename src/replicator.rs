@@ -41,7 +41,7 @@ use crate::{
         kCBLReplicatorConnecting, kCBLReplicatorIdle, kCBLReplicatorOffline, kCBLReplicatorStopped,
         kCBLReplicatorTypePull, kCBLReplicatorTypePush, kCBLReplicatorTypePushAndPull,
     },
-    MutableArray, Listener,
+    MutableArray, Listener, error,
 };
 
 // WARNING: THIS API IS UNIMPLEMENTED SO FAR
@@ -344,7 +344,7 @@ pub type PropertyEncryptor = fn(
     document_id: Option<String>,
     properties: Dict,
     key_path: Option<String>,
-    input: Option<Vec<u8>>,
+    input: Vec<u8>,
     algorithm: Option<String>,
     kid: Option<String>,
     error: &Error,
@@ -364,26 +364,33 @@ pub extern "C" fn c_property_encryptor(
         let repl_conf_context = context as *const ReplicationConfigurationContext;
         let mut error = cbl_error.as_ref().map_or(Error::default(), Error::new);
 
-        let result = (*repl_conf_context)
-            .property_encryptor
-            .map(|callback| {
-                callback(
-                    document_id.to_string(),
-                    Dict::wrap(properties, &properties),
-                    key_path.to_string(),
-                    input.to_vec(),
-                    algorithm.as_ref().and_then(|s| s.clone().to_string()),
-                    kid.as_ref().and_then(|s| s.clone().to_string()),
-                    &error,
-                )
-            })
-            .map_or(FLSliceResult_New(0), |v| match v {
-                Ok(v) => FLSlice_Copy(from_bytes(&v[..]).get_ref()),
-                Err(_) => {
-                    error = Error::cbl_error(CouchbaseLiteError::Crypto);
-                    FLSliceResult_New(0)
-                }
-            });
+        let mut result = FLSliceResult_New(0);
+        if let Some(input) = input.to_vec() {
+            result = (*repl_conf_context)
+                .property_encryptor
+                .map(|callback| {
+                    callback(
+                        document_id.to_string(),
+                        Dict::wrap(properties, &properties),
+                        key_path.to_string(),
+                        input,
+                        algorithm.as_ref().and_then(|s| s.clone().to_string()),
+                        kid.as_ref().and_then(|s| s.clone().to_string()),
+                        &error,
+                    )
+                })
+                .map_or(FLSliceResult_New(0), |v| match v {
+                    Ok(v) => FLSlice_Copy(from_bytes(&v[..]).get_ref()),
+                    Err(_) => {
+                        error!("Encryption callback returned with error");
+                        error = Error::cbl_error(CouchbaseLiteError::Crypto);
+                        FLSliceResult_New(0)
+                    }
+                });
+        } else {
+            error!("Encryption input is None");
+            error = Error::cbl_error(CouchbaseLiteError::Crypto);
+        }
 
         if error != Error::default() {
             *cbl_error = error.as_cbl_error();
@@ -400,7 +407,7 @@ pub type PropertyDecryptor = fn(
     document_id: Option<String>,
     properties: Dict,
     key_path: Option<String>,
-    input: Option<Vec<u8>>,
+    input: Vec<u8>,
     algorithm: Option<String>,
     kid: Option<String>,
     error: &Error,
@@ -420,26 +427,33 @@ pub extern "C" fn c_property_decryptor(
         let repl_conf_context = context as *const ReplicationConfigurationContext;
         let mut error = cbl_error.as_ref().map_or(Error::default(), Error::new);
 
-        let result = (*repl_conf_context)
-            .property_decryptor
-            .map(|callback| {
-                callback(
-                    document_id.to_string(),
-                    Dict::wrap(properties, &properties),
-                    key_path.to_string(),
-                    input.to_vec(),
-                    algorithm.to_string(),
-                    kid.to_string(),
-                    &error,
-                )
-            })
-            .map_or(FLSliceResult_New(0), |v| match v {
-                Ok(v) => FLSlice_Copy(from_bytes(&v[..]).get_ref()),
-                Err(_) => {
-                    error = Error::cbl_error(CouchbaseLiteError::Crypto);
-                    FLSliceResult_New(0)
-                }
-            });
+        let mut result = FLSliceResult_New(0);
+        if let Some(input) = input.to_vec() {
+            result = (*repl_conf_context)
+                .property_decryptor
+                .map(|callback| {
+                    callback(
+                        document_id.to_string(),
+                        Dict::wrap(properties, &properties),
+                        key_path.to_string(),
+                        input.to_vec(),
+                        algorithm.to_string(),
+                        kid.to_string(),
+                        &error,
+                    )
+                })
+                .map_or(FLSliceResult_New(0), |v| match v {
+                    Ok(v) => FLSlice_Copy(from_bytes(&v[..]).get_ref()),
+                    Err(_) => {
+                        error!("Decryption callback returned with error");
+                        error = Error::cbl_error(CouchbaseLiteError::Crypto);
+                        FLSliceResult_New(0)
+                    }
+                });
+        } else {
+            error!("Decryption input is None");
+            error = Error::cbl_error(CouchbaseLiteError::Crypto);
+        }
 
         if error != Error::default() {
             *cbl_error = error.as_cbl_error();
