@@ -24,8 +24,8 @@ use std::{
     time::Duration,
 };
 use crate::{
-    CblRef, Database, Dict, Document, Error, ListenerToken, MutableDict, Result, check_error,
-    release, retain,
+    CblRef, CouchbaseLiteError, Database, Dict, Document, Error, ListenerToken, MutableDict,
+    Result, check_error, release, retain,
     slice::{from_str, from_bytes, self},
     c_api::{
         CBLListener_Remove, CBLAuth_CreatePassword, CBLAuth_CreateSession, CBLAuthenticator,
@@ -362,7 +362,7 @@ pub extern "C" fn c_property_encryptor(
 ) -> FLSliceResult {
     unsafe {
         let repl_conf_context = context as *const ReplicationConfigurationContext;
-        let error = cbl_error.as_ref().map_or(Error::default(), Error::new);
+        let mut error = cbl_error.as_ref().map_or(Error::default(), Error::new);
 
         let result = (*repl_conf_context)
             .property_encryptor
@@ -379,7 +379,10 @@ pub extern "C" fn c_property_encryptor(
             })
             .map_or(FLSliceResult_New(0), |v| match v {
                 Ok(v) => FLSlice_Copy(from_bytes(&v[..]).get_ref()),
-                Err(_) => FLSliceResult_New(0),
+                Err(_) => {
+                    error = Error::cbl_error(CouchbaseLiteError::Crypto);
+                    FLSliceResult_New(0)
+                }
             });
 
         if error != Error::default() {
@@ -415,7 +418,7 @@ pub extern "C" fn c_property_decryptor(
 ) -> FLSliceResult {
     unsafe {
         let repl_conf_context = context as *const ReplicationConfigurationContext;
-        let error = cbl_error.as_ref().map_or(Error::default(), Error::new);
+        let mut error = cbl_error.as_ref().map_or(Error::default(), Error::new);
 
         let result = (*repl_conf_context)
             .property_decryptor
@@ -432,7 +435,10 @@ pub extern "C" fn c_property_decryptor(
             })
             .map_or(FLSliceResult_New(0), |v| match v {
                 Ok(v) => FLSlice_Copy(from_bytes(&v[..]).get_ref()),
-                Err(_) => FLSliceResult_New(0),
+                Err(_) => {
+                    error = Error::cbl_error(CouchbaseLiteError::Crypto);
+                    FLSliceResult_New(0)
+                }
             });
 
         if error != Error::default() {
