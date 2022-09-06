@@ -50,7 +50,7 @@ fn bindgen_for_mac(builder: bindgen::Builder) -> Result<bindgen::Builder, Box<dy
 
     let sdk = String::from_utf8(
         Command::new("xcrun")
-            .args(["--sdk", "macosx", "--show-sdk-path"])
+            .args(&["--sdk", "macosx", "--show-sdk-path"])
             .output()
             .expect("failed to execute process")
             .stdout,
