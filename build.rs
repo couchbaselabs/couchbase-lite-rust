@@ -29,6 +29,7 @@ use std::env;
 use std::error::Error;
 use std::fs;
 use std::path::PathBuf;
+use std::process::Command;
 use fs_extra::dir;
 
 static CBL_INCLUDE_DIR: &str = "libcblite-3.0.2/include";
@@ -42,8 +43,23 @@ fn main() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+fn bindgen_for_mac(builder: bindgen::Builder) -> Result<bindgen::Builder, Box<dyn Error>> {
+    if env::var("CARGO_CFG_TARGET_OS")? != "macos" {
+        return Ok(builder);
+    }
+
+    let sdk = String::from_utf8(
+        Command::new("xcrun")
+            .args(["--sdk", "macosx", "--show-sdk-path"])
+            .output()
+            .expect("failed to execute process")
+            .stdout,
+    )?;
+    Ok(builder.clang_arg(format!("-isysroot{}", sdk.trim())))
+}
+
 fn generate_bindings() -> Result<(), Box<dyn Error>> {
-    let bindings = bindgen::Builder::default()
+    let bindings = bindgen_for_mac(bindgen::Builder::default())?
         .header("src/wrapper.h")
         .clang_arg(format!("-I{}", CBL_INCLUDE_DIR))
         .whitelist_type("CBL.*")
