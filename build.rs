@@ -31,8 +31,8 @@ use std::fs;
 use std::path::PathBuf;
 use fs_extra::dir;
 
-static CBL_INCLUDE_DIR: &str = "libcblite-3.0.2/include";
-static CBL_LIB_DIR: &str = "libcblite-3.0.2/lib";
+static CBL_INCLUDE_DIR: &str = "libcblite-3.0.3/include";
+static CBL_LIB_DIR: &str = "libcblite-3.0.3/lib";
 
 fn main() -> Result<(), Box<dyn Error>> {
     generate_bindings()?;
