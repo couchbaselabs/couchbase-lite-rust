@@ -15,7 +15,7 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
     - name: Install apt-get
-      run: sudo apt-get install -y clang llvm libicu66
+      run: sudo apt-get install -y clang llvm
     - name: List libs
       run: ls -l /usr/lib
     - name: Install latest nightly
