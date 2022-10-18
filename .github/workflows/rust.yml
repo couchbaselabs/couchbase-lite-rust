@@ -8,14 +8,16 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
-  LIBCLANG_PATH: /usr/lib/llvm-10/lib/
+  LIBCLANG_PATH: /usr/lib/llvm-14/lib/
 
 jobs:
   build:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     steps:
     - name: Install apt-get
-      run: sudo apt-get install -y clang llvm libicu66
+      run: sudo apt-get install -y clang llvm
+    - name: List libs
+      run: ls -l /usr/lib
     - name: Install latest nightly
       uses: actions-rs/toolchain@v1
       with:
