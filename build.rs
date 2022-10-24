@@ -93,18 +93,18 @@ fn configure_rustc() -> Result<(), Box<dyn Error>> {
         CBL_LIB_DIR,
         target_dir
     );
-    println!(
-        "cargo:rustc-link-search=framework={}/{}/{}/CouchbaseLite.xcframework/ios-arm64_armv7",
-        env!("CARGO_MANIFEST_DIR"),
-        CBL_LIB_DIR,
-        target_dir
-    );
     println!("cargo:rustc-link-search={}", env::var("OUT_DIR")?);
 
     let target_os = env::var("CARGO_CFG_TARGET_OS")?;
     if target_os != "ios" {
         println!("cargo:rustc-link-lib=dylib=cblite");
     } else {
+        println!(
+            "cargo:rustc-link-search=framework={}/{}/{}/CouchbaseLite.xcframework/ios-arm64_armv7",
+            env!("CARGO_MANIFEST_DIR"),
+            CBL_LIB_DIR,
+            target_dir
+        );
         println!("cargo:rustc-link-lib=framework=CouchbaseLite");
     }
 
