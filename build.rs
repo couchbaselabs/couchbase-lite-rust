@@ -64,7 +64,7 @@ fn generate_bindings() -> Result<(), Box<dyn Error>> {
         .clang_arg(format!("-I{}", CBL_INCLUDE_DIR));
 
     // Fix cross-compilation from MacOS to Android targets.
-    // The following clang_args calls prevent bindgen from trying to include
+    // The following clang_arg calls prevent bindgen from trying to include
     // MacOS standards headers and returning an error when trying to generate bindings.
     // Basically, we specifiy NDK sysroot and usr/include dirs depending on the target arch.
     //
@@ -73,7 +73,6 @@ fn generate_bindings() -> Result<(), Box<dyn Error>> {
     // /Applications/Xcode.app/.../Developer/SDKs/MacOSX10.15.sdk/usr/include/sys/cdefs.h:807:2: error: Unsupported architecture
     // /Applications/Xcode.app/.../Developer/SDKs/MacOSX10.15.sdk/usr/include/machine/_types.h:34:2: error: architecture not supported
     // FTR: https://github.com/rust-lang/rust-bindgen/issues/1780
-
     if env::var("CARGO_CFG_TARGET_OS")?.contains("android") {
         let ndk_sysroot = format!(
             "{}//toolchains/llvm/prebuilt/{}-x86_64/sysroot",
