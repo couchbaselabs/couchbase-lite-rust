@@ -59,9 +59,48 @@ fn bindgen_for_mac(builder: bindgen::Builder) -> Result<bindgen::Builder, Box<dy
 }
 
 fn generate_bindings() -> Result<(), Box<dyn Error>> {
-    let bindings = bindgen_for_mac(bindgen::Builder::default())?
+    let mut bindings = bindgen_for_mac(bindgen::Builder::default())?
         .header("src/wrapper.h")
-        .clang_arg(format!("-I{}", CBL_INCLUDE_DIR))
+        .clang_arg(format!("-I{}", CBL_INCLUDE_DIR));
+
+    // Fix cross-compilation from MacOS to Android targets.
+    // The following clang_arg calls prevent bindgen from trying to include
+    // MacOS standards headers and returning an error when trying to generate bindings.
+    // Basically, we specifiy NDK sysroot and usr/include dirs depending on the target arch.
+    //
+    // Sample of errors:
+    //
+    // /Applications/Xcode.app/.../Developer/SDKs/MacOSX10.15.sdk/usr/include/sys/cdefs.h:807:2: error: Unsupported architecture
+    // /Applications/Xcode.app/.../Developer/SDKs/MacOSX10.15.sdk/usr/include/machine/_types.h:34:2: error: architecture not supported
+    // FTR: https://github.com/rust-lang/rust-bindgen/issues/1780
+    if env::var("CARGO_CFG_TARGET_OS")?.contains("android") {
+        let ndk_sysroot = format!(
+            "{}//toolchains/llvm/prebuilt/{}-x86_64/sysroot",
+            env::var("NDK_HOME")?,
+            if env::var("HOST")
+                .expect("Can't read host triplet")
+                .contains("apple")
+            {
+                "darwin"
+            } else {
+                "linux"
+            }
+        );
+        let target_triplet =
+            if env::var("CARGO_CFG_TARGET_ARCH").expect("Can't read target arch value!") == "arm" {
+                "arm-linux-androideabi"
+            } else {
+                "aarch64-linux-android"
+            };
+        bindings = bindings
+            .clang_arg(format!("--sysroot={}", ndk_sysroot))
+            .clang_arg(format!("-I{}/usr/include", ndk_sysroot))
+            .clang_arg(format!("-I{}/usr/include/{}", ndk_sysroot, target_triplet))
+            .clang_arg(format!("--target={}", target_triplet));
+    }
+
+    let out_dir = env::var("OUT_DIR")?;
+    bindings
         .whitelist_type("CBL.*")
         .whitelist_type("FL.*")
         .whitelist_var("k?CBL.*")
@@ -72,10 +111,7 @@ fn generate_bindings() -> Result<(), Box<dyn Error>> {
         .size_t_is_usize(true)
         .parse_callbacks(Box::new(bindgen::CargoCallbacks))
         .generate()
-        .expect("Unable to generate bindings");
-
-    let out_dir = env::var("OUT_DIR")?;
-    bindings
+        .expect("Unable to generate bindings")
         .write_to_file(PathBuf::from(out_dir).join("bindings.rs"))
         .expect("Couldn't write bindings!");
 
