@@ -84,16 +84,8 @@ fn generate_bindings() -> Result<(), Box<dyn Error>> {
     if env::var("HOST")?.contains("apple") {
         if env::var("CARGO_CFG_TARGET_OS")?.contains("android") {
             let ndk_sysroot = format!(
-                "{}//toolchains/llvm/prebuilt/{}-x86_64/sysroot",
+                "{}/toolchains/llvm/prebuilt/darwin-x86_64/sysroot",
                 env::var("NDK_HOME")?,
-                if env::var("HOST")
-                    .expect("Can't read host triplet")
-                    .contains("apple")
-                {
-                    "darwin"
-                } else {
-                    "linux"
-                }
             );
             let target_triplet = if env::var("CARGO_CFG_TARGET_ARCH")
                 .expect("Can't read target arch value!")
