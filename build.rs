@@ -38,7 +38,15 @@ static CBL_LIB_DIR: &str = "libcblite-3.0.3/lib";
 fn main() -> Result<(), Box<dyn Error>> {
     generate_bindings()?;
     configure_rustc()?;
-    copy_lib()?;
+
+    // if we're currently in a cargo check workflow, no need to try to copy libs around.
+    // In particular, it won't work using the current clippy_extra on billeo-engine side
+    // because the used target is x86_64-linux-android, for which there are no libs under
+    // libcblite-3.0.3/lib folder.
+    // Note: ONLY_CARGO_CHECK is defined as "true" in clippy_extra.yml.
+    if env::var("ONLY_CARGO_CHECK").unwrap_or_default() != *"true" {
+        copy_lib()?;
+    }
 
     Ok(())
 }
@@ -74,7 +82,6 @@ fn generate_bindings() -> Result<(), Box<dyn Error>> {
     // /Applications/Xcode.app/.../Developer/SDKs/MacOSX10.15.sdk/usr/include/machine/_types.h:34:2: error: architecture not supported
     // FTR: https://github.com/rust-lang/rust-bindgen/issues/1780
     if env::var("HOST")?.contains("apple") {
-        println!("cargo:warning=THIS SHOULDND'T HAPPEN!");
         if env::var("CARGO_CFG_TARGET_OS")?.contains("android") {
             let ndk_sysroot = format!(
                 "{}//toolchains/llvm/prebuilt/{}-x86_64/sysroot",
@@ -148,22 +155,17 @@ fn configure_rustc() -> Result<(), Box<dyn Error>> {
         );
         println!("cargo:rustc-link-lib=framework=CouchbaseLite");
     }
-    println!("cargo:warning=RUSTC CONFIGURATION OK");
-
     Ok(())
 }
 
 pub fn copy_lib() -> Result<(), Box<dyn Error>> {
-    println!("cargo:warning=copy lib");
     let lib_path = PathBuf::from(format!(
         "{}/{}/{}/",
         env!("CARGO_MANIFEST_DIR"),
         CBL_LIB_DIR,
         env::var("TARGET").unwrap()
     ));
-    println!("cargo:warning=lib path: {:?}", lib_path);
     let dest_path = PathBuf::from(format!("{}/", env::var("OUT_DIR")?));
-    println!("cargo:warning=dest path: {:?}", dest_path);
 
     match env::var("CARGO_CFG_TARGET_OS").unwrap().as_str() {
         "android" => {
@@ -180,37 +182,30 @@ pub fn copy_lib() -> Result<(), Box<dyn Error>> {
             )?;
         }
         "linux" => {
-            println!("cargo:warning=trying to copy 1");
             fs::copy(
                 lib_path.join("libcblite.so.3"),
                 dest_path.join("libcblite.so.3"),
             )?;
-            println!("cargo:warning=trying to copy 2");
             fs::copy(
                 lib_path.join("libicudata.so.66"),
                 dest_path.join("libicudata.so.66"),
             )?;
-            println!("cargo:warning=trying to copy 3");
             fs::copy(
                 lib_path.join("libicui18n.so.66"),
                 dest_path.join("libicui18n.so.66"),
             )?;
-            println!("cargo:warning=trying to copy 4");
             fs::copy(
                 lib_path.join("libicuio.so.66"),
                 dest_path.join("libicuio.so.66"),
             )?;
-            println!("cargo:warning=trying to copy 5");
             fs::copy(
                 lib_path.join("libicutu.so.66"),
                 dest_path.join("libicutu.so.66"),
             )?;
-            println!("cargo:warning=trying to copy 6");
             fs::copy(
                 lib_path.join("libicuuc.so.66"),
                 dest_path.join("libicuuc.so.66"),
             )?;
-            println!("cargo:warning=trying to copy 7");
             // Needed only for build, not required for run
             fs::copy(
                 lib_path.join("libcblite.so.3"),
