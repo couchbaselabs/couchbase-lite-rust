@@ -81,26 +81,22 @@ fn generate_bindings() -> Result<(), Box<dyn Error>> {
     // /Applications/Xcode.app/.../Developer/SDKs/MacOSX10.15.sdk/usr/include/sys/cdefs.h:807:2: error: Unsupported architecture
     // /Applications/Xcode.app/.../Developer/SDKs/MacOSX10.15.sdk/usr/include/machine/_types.h:34:2: error: architecture not supported
     // FTR: https://github.com/rust-lang/rust-bindgen/issues/1780
-    if env::var("HOST")?.contains("apple") {
-        if env::var("CARGO_CFG_TARGET_OS")?.contains("android") {
-            let ndk_sysroot = format!(
-                "{}/toolchains/llvm/prebuilt/darwin-x86_64/sysroot",
-                env::var("NDK_HOME")?,
-            );
-            let target_triplet = if env::var("CARGO_CFG_TARGET_ARCH")
-                .expect("Can't read target arch value!")
-                == "arm"
-            {
+    if env::var("HOST")?.contains("apple") && env::var("CARGO_CFG_TARGET_OS")?.contains("android") {
+        let ndk_sysroot = format!(
+            "{}/toolchains/llvm/prebuilt/darwin-x86_64/sysroot",
+            env::var("NDK_HOME")?,
+        );
+        let target_triplet =
+            if env::var("CARGO_CFG_TARGET_ARCH").expect("Can't read target arch value!") == "arm" {
                 "arm-linux-androideabi"
             } else {
                 "aarch64-linux-android"
             };
-            bindings = bindings
-                .clang_arg(format!("--sysroot={}", ndk_sysroot))
-                .clang_arg(format!("-I{}/usr/include", ndk_sysroot))
-                .clang_arg(format!("-I{}/usr/include/{}", ndk_sysroot, target_triplet))
-                .clang_arg(format!("--target={}", target_triplet));
-        }
+        bindings = bindings
+            .clang_arg(format!("--sysroot={}", ndk_sysroot))
+            .clang_arg(format!("-I{}/usr/include", ndk_sysroot))
+            .clang_arg(format!("-I{}/usr/include/{}", ndk_sysroot, target_triplet))
+            .clang_arg(format!("--target={}", target_triplet));
     }
 
     let out_dir = env::var("OUT_DIR")?;
