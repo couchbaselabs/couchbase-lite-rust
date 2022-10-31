@@ -38,7 +38,11 @@ static CBL_LIB_DIR: &str = "libcblite-3.0.3/lib";
 fn main() -> Result<(), Box<dyn Error>> {
     generate_bindings()?;
     configure_rustc()?;
-    copy_lib()?;
+
+    // Bypass copying libraries when the build script is called in a cargo check context.
+    if env::var("ONLY_CARGO_CHECK").unwrap_or_default() != *"true" {
+        copy_lib()?;
+    }
 
     Ok(())
 }
@@ -73,18 +77,10 @@ fn generate_bindings() -> Result<(), Box<dyn Error>> {
     // /Applications/Xcode.app/.../Developer/SDKs/MacOSX10.15.sdk/usr/include/sys/cdefs.h:807:2: error: Unsupported architecture
     // /Applications/Xcode.app/.../Developer/SDKs/MacOSX10.15.sdk/usr/include/machine/_types.h:34:2: error: architecture not supported
     // FTR: https://github.com/rust-lang/rust-bindgen/issues/1780
-    if env::var("CARGO_CFG_TARGET_OS")?.contains("android") {
+    if env::var("HOST")?.contains("apple") && env::var("CARGO_CFG_TARGET_OS")?.contains("android") {
         let ndk_sysroot = format!(
-            "{}//toolchains/llvm/prebuilt/{}-x86_64/sysroot",
+            "{}/toolchains/llvm/prebuilt/darwin-x86_64/sysroot",
             env::var("NDK_HOME")?,
-            if env::var("HOST")
-                .expect("Can't read host triplet")
-                .contains("apple")
-            {
-                "darwin"
-            } else {
-                "linux"
-            }
         );
         let target_triplet =
             if env::var("CARGO_CFG_TARGET_ARCH").expect("Can't read target arch value!") == "arm" {
@@ -143,7 +139,6 @@ fn configure_rustc() -> Result<(), Box<dyn Error>> {
         );
         println!("cargo:rustc-link-lib=framework=CouchbaseLite");
     }
-
     Ok(())
 }
 
