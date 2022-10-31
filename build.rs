@@ -39,11 +39,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     generate_bindings()?;
     configure_rustc()?;
 
-    // if we're currently in a cargo check workflow, no need to try to copy libs around.
-    // In particular, it won't work using the current clippy_extra on billeo-engine side
-    // because the used target is x86_64-linux-android, for which there are no libs under
-    // libcblite-3.0.3/lib folder.
-    // Note: ONLY_CARGO_CHECK is defined as "true" in clippy_extra.yml.
+    // Bypass copying libraries when the build script is called in a cargo check context.
     if env::var("ONLY_CARGO_CHECK").unwrap_or_default() != *"true" {
         copy_lib()?;
     }
