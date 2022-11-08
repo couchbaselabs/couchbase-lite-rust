@@ -136,7 +136,14 @@ fn configure_rustc() -> Result<(), Box<dyn Error>> {
             env!("CARGO_MANIFEST_DIR"),
             CBL_LIB_DIR,
             target_dir,
-            if env::var("CARGO_CFG_TARGET_ARCH").expect("Can't read target_arch").contains("x86") { "ios-arm64_i386_x86_64-simulator" } else { "ios-arm64_armv7" }
+            if env::var("CARGO_CFG_TARGET_ARCH")
+                .expect("Can't read target_arch")
+                .contains("x86")
+            {
+                "ios-arm64_i386_x86_64-simulator"
+            } else {
+                "ios-arm64_armv7"
+            }
         );
         println!("cargo:rustc-link-lib=framework=CouchbaseLite");
     }
