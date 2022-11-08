@@ -131,19 +131,18 @@ fn configure_rustc() -> Result<(), Box<dyn Error>> {
     if target_os != "ios" {
         println!("cargo:rustc-link-lib=dylib=cblite");
     } else {
+        let target_arch = env::var("CARGO_CFG_TARGET_ARCH").expect("Can't read target_arch");
+        let ios_framework = match target_arch.as_str() {
+            "aarch64-apple-ios" => "ios-arm64_armv7",
+            "x86_64-apple-ios" => "ios-arm64_i386_x86_64-simulator",
+            _ => panic!("Unsupported ios target"),
+        };
+
         println!(
-            "cargo:rustc-link-search=framework={}/{}/{}/CouchbaseLite.xcframework/{}",
+            "cargo:rustc-link-search=framework={}/{}/ios/CouchbaseLite.xcframework/{}",
             env!("CARGO_MANIFEST_DIR"),
             CBL_LIB_DIR,
-            target_dir,
-            if env::var("CARGO_CFG_TARGET_ARCH")
-                .expect("Can't read target_arch")
-                .contains("x86")
-            {
-                "ios-arm64_i386_x86_64-simulator"
-            } else {
-                "ios-arm64_armv7"
-            }
+            ios_framework,
         );
         println!("cargo:rustc-link-lib=framework=CouchbaseLite");
     }
