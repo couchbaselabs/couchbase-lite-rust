@@ -133,8 +133,8 @@ fn configure_rustc() -> Result<(), Box<dyn Error>> {
     } else {
         let target_arch = env::var("CARGO_CFG_TARGET_ARCH").expect("Can't read target_arch");
         let ios_framework = match target_arch.as_str() {
-            "aarch64-apple-ios" => "ios-arm64_armv7",
-            "x86_64-apple-ios" => "ios-arm64_i386_x86_64-simulator",
+            "aarch64" => "ios-arm64_armv7",
+            "x86_64" => "ios-arm64_i386_x86_64-simulator",
             _ => panic!("Unsupported ios target"),
         };
 
