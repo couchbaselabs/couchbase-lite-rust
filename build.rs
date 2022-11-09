@@ -118,18 +118,18 @@ fn configure_rustc() -> Result<(), Box<dyn Error>> {
     println!("cargo:rerun-if-changed=src/wrapper.h");
     println!("cargo:rerun-if-changed={}", CBL_INCLUDE_DIR);
     println!("cargo:rerun-if-changed={}", CBL_LIB_DIR);
-    let target_dir = env::var("TARGET")?;
-    println!(
-        "cargo:rustc-link-search={}/{}/{}",
-        env!("CARGO_MANIFEST_DIR"),
-        CBL_LIB_DIR,
-        target_dir
-    );
     println!("cargo:rustc-link-search={}", env::var("OUT_DIR")?);
 
+    let target_dir = env::var("TARGET")?;
     let target_os = env::var("CARGO_CFG_TARGET_OS")?;
     if target_os != "ios" {
         println!("cargo:rustc-link-lib=dylib=cblite");
+        println!(
+            "cargo:rustc-link-search={}/{}/{}",
+            env!("CARGO_MANIFEST_DIR"),
+            CBL_LIB_DIR,
+            target_dir
+        );
     } else {
         let target_arch = env::var("CARGO_CFG_TARGET_ARCH").expect("Can't read target_arch");
         let ios_framework = match target_arch.as_str() {
@@ -150,15 +150,20 @@ fn configure_rustc() -> Result<(), Box<dyn Error>> {
 }
 
 pub fn copy_lib() -> Result<(), Box<dyn Error>> {
+    let target_os = env::var("CARGO_CFG_TARGET_OS")?;
     let lib_path = PathBuf::from(format!(
         "{}/{}/{}/",
         env!("CARGO_MANIFEST_DIR"),
         CBL_LIB_DIR,
-        env::var("TARGET").unwrap()
+        if target_os == "ios" {
+            "ios".to_string()
+        } else {
+            env::var("TARGET").unwrap()
+        }
     ));
     let dest_path = PathBuf::from(format!("{}/", env::var("OUT_DIR")?));
 
-    match env::var("CARGO_CFG_TARGET_OS").unwrap().as_str() {
+    match target_os.as_str() {
         "android" => {
             fs::copy(
                 lib_path.join("libcblite.stripped.so"),
