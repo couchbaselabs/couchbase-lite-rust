@@ -177,10 +177,13 @@ pub fn copy_lib() -> Result<(), Box<dyn Error>> {
             )?;
         }
         "ios" => {
+            let mut copy_options = dir::CopyOptions::new();
+            copy_options.overwrite = true;
+
             dir::copy(
                 lib_path.join("CouchbaseLite.xcframework"),
                 dest_path,
-                &dir::CopyOptions::new(),
+                &copy_options,
             )?;
         }
         "linux" => {
