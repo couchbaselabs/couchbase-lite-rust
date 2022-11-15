@@ -41,13 +41,13 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     // Bypass copying libraries when the build script is called in a cargo check context.
     if env::var("ONLY_CARGO_CHECK").unwrap_or_default() != *"true" {
-        if let Err(e) = copy_lib() {
-            panic!(
-                "Unable to manage copy of cblite libs, is '{}' a supported target? Error: {}",
-                env::var("TARGET")?,
-                e
-            );
-        }
+        copy_lib().expect(
+            &format!(
+                "can't copy cblite libs, is '{}' a supported target?",
+                env::var("TARGET")?
+            )
+            .to_string(),
+        );
     }
 
     Ok(())
