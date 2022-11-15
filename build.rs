@@ -41,7 +41,13 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     // Bypass copying libraries when the build script is called in a cargo check context.
     if env::var("ONLY_CARGO_CHECK").unwrap_or_default() != *"true" {
-        copy_lib()?;
+        copy_lib().expect(
+            &format!(
+                "can't copy cblite libs, is '{}' a supported target?",
+                env::var("TARGET")?
+            )
+            .to_string(),
+        );
     }
 
     Ok(())
@@ -118,24 +124,31 @@ fn configure_rustc() -> Result<(), Box<dyn Error>> {
     println!("cargo:rerun-if-changed=src/wrapper.h");
     println!("cargo:rerun-if-changed={}", CBL_INCLUDE_DIR);
     println!("cargo:rerun-if-changed={}", CBL_LIB_DIR);
-    let target_dir = env::var("TARGET")?;
-    println!(
-        "cargo:rustc-link-search={}/{}/{}",
-        env!("CARGO_MANIFEST_DIR"),
-        CBL_LIB_DIR,
-        target_dir
-    );
     println!("cargo:rustc-link-search={}", env::var("OUT_DIR")?);
 
+    let target_dir = env::var("TARGET")?;
     let target_os = env::var("CARGO_CFG_TARGET_OS")?;
     if target_os != "ios" {
         println!("cargo:rustc-link-lib=dylib=cblite");
-    } else {
         println!(
-            "cargo:rustc-link-search=framework={}/{}/{}/CouchbaseLite.xcframework/ios-arm64_armv7",
+            "cargo:rustc-link-search={}/{}/{}",
             env!("CARGO_MANIFEST_DIR"),
             CBL_LIB_DIR,
             target_dir
+        );
+    } else {
+        let target_arch = env::var("CARGO_CFG_TARGET_ARCH").expect("Can't read target_arch");
+        let ios_framework = match target_arch.as_str() {
+            "aarch64" => "ios-arm64_armv7",
+            "x86_64" => "ios-arm64_i386_x86_64-simulator",
+            _ => panic!("Unsupported ios target"),
+        };
+
+        println!(
+            "cargo:rustc-link-search=framework={}/{}/ios/CouchbaseLite.xcframework/{}",
+            env!("CARGO_MANIFEST_DIR"),
+            CBL_LIB_DIR,
+            ios_framework,
         );
         println!("cargo:rustc-link-lib=framework=CouchbaseLite");
     }
@@ -143,15 +156,20 @@ fn configure_rustc() -> Result<(), Box<dyn Error>> {
 }
 
 pub fn copy_lib() -> Result<(), Box<dyn Error>> {
+    let target_os = env::var("CARGO_CFG_TARGET_OS")?;
     let lib_path = PathBuf::from(format!(
         "{}/{}/{}/",
         env!("CARGO_MANIFEST_DIR"),
         CBL_LIB_DIR,
-        env::var("TARGET").unwrap()
+        if target_os == "ios" {
+            "ios".to_string()
+        } else {
+            env::var("TARGET").unwrap()
+        }
     ));
     let dest_path = PathBuf::from(format!("{}/", env::var("OUT_DIR")?));
 
-    match env::var("CARGO_CFG_TARGET_OS").unwrap().as_str() {
+    match target_os.as_str() {
         "android" => {
             fs::copy(
                 lib_path.join("libcblite.stripped.so"),
@@ -159,10 +177,13 @@ pub fn copy_lib() -> Result<(), Box<dyn Error>> {
             )?;
         }
         "ios" => {
+            let mut copy_options = dir::CopyOptions::new();
+            copy_options.overwrite = true;
+
             dir::copy(
                 lib_path.join("CouchbaseLite.xcframework"),
                 dest_path,
-                &dir::CopyOptions::new(),
+                &copy_options,
             )?;
         }
         "linux" => {
