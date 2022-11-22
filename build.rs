@@ -41,13 +41,12 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     // Bypass copying libraries when the build script is called in a cargo check context.
     if env::var("ONLY_CARGO_CHECK").unwrap_or_default() != *"true" {
-        copy_lib().expect(
-            &format!(
+        copy_lib().unwrap_or_else(|_| {
+            panic!(
                 "can't copy cblite libs, is '{}' a supported target?",
-                env::var("TARGET")?
+                env::var("TARGET").unwrap_or_default()
             )
-            .to_string(),
-        );
+        });
     }
 
     Ok(())
@@ -60,7 +59,7 @@ fn bindgen_for_mac(builder: bindgen::Builder) -> Result<bindgen::Builder, Box<dy
 
     let sdk = String::from_utf8(
         Command::new("xcrun")
-            .args(&["--sdk", "macosx", "--show-sdk-path"])
+            .args(["--sdk", "macosx", "--show-sdk-path"])
             .output()
             .expect("failed to execute process")
             .stdout,

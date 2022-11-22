@@ -295,7 +295,7 @@ unsafe extern "C" fn c_replication_conflict_resolver(
 ) -> *const CBLDocument {
     let repl_conf_context = context as *const ReplicationConfigurationContext;
 
-    let doc_id = document_id.to_string().unwrap_or_else(|| "".to_string());
+    let doc_id = document_id.to_string().unwrap_or_default();
     let local_document = if local_document.is_null() {
         None
     } else {
@@ -487,12 +487,16 @@ pub struct ReplicatorConfiguration {
 
 //======== LIFECYCLE
 
+type ReplicatorsListeners<T> = Vec<Listener<Box<T>>>;
+
 /** A background task that syncs a \ref Database with a remote server or peer. */
 pub struct Replicator {
     cbl_ref: *mut CBLReplicator,
     pub config: Option<ReplicatorConfiguration>,
     pub headers: Option<MutableDict>,
     pub context: Option<Box<ReplicationConfigurationContext>>,
+    change_listener: ReplicatorsListeners<ReplicatorChangeListener>,
+    document_listener: ReplicatorsListeners<ReplicatedDocumentListener>,
 }
 
 impl CblRef for Replicator {
@@ -570,6 +574,8 @@ impl Replicator {
                 config: Some(config),
                 headers: Some(headers),
                 context: Some(context),
+                change_listener: vec![],
+                document_listener: vec![],
             })
         }
     }
@@ -587,7 +593,7 @@ impl Replicator {
     pub fn stop(&mut self) -> bool {
         unsafe {
             let (sender, receiver) = channel();
-            let callback: ReplicatorChangeListener = Box::new(move |_, status| {
+            let callback: ReplicatorChangeListener = Box::new(move |status| {
                 if status.activity == ReplicatorActivityLevel::Stopped {
                     sender.send(true).unwrap();
                 }
@@ -626,6 +632,89 @@ impl Replicator {
         unsafe {
             CBLReplicator_SetSuspended(self.get_ref(), suspended);
         }
+    }
+
+    /** Returns the replicator's current status. */
+    pub fn status(&self) -> ReplicatorStatus {
+        unsafe { CBLReplicator_Status(self.get_ref()).into() }
+    }
+
+    /** Indicates which documents have local changes that have not yet been pushed to the server
+    by this replicator. This is of course a snapshot, that will go out of date as the replicator
+    makes progress and/or documents are saved locally. */
+    pub fn pending_document_ids(&self) -> Result<HashSet<String>> {
+        unsafe {
+            let mut error = CBLError::default();
+            let docs: FLDict =
+                CBLReplicator_PendingDocumentIDs(self.get_ref(), std::ptr::addr_of_mut!(error));
+
+            check_error(&error).and_then(|()| {
+                if docs.is_null() {
+                    return Err(Error::default());
+                }
+
+                let dict = Dict::wrap(docs, self);
+                Ok(dict.to_keys_hash_set())
+            })
+        }
+    }
+
+    /** Indicates whether the document with the given ID has local changes that have not yet been
+    pushed to the server by this replicator.
+
+    This is equivalent to, but faster than, calling \ref pending_document_ids and
+    checking whether the result contains \p docID. See that function's documentation for details. */
+    pub fn is_document_pending(&self, doc_id: &str) -> Result<bool> {
+        unsafe {
+            let mut error = CBLError::default();
+            let result = CBLReplicator_IsDocumentPending(
+                self.get_ref(),
+                from_str(doc_id).get_ref(),
+                std::ptr::addr_of_mut!(error),
+            );
+            check_error(&error).map(|_| result)
+        }
+    }
+
+    /**
+     Adds a listener that will be called when the replicator's status changes.
+    */
+    #[must_use]
+    pub fn add_change_listener(mut self, listener: ReplicatorChangeListener) -> Self {
+        let listener = unsafe {
+            let listener = Box::new(listener);
+            let ptr = Box::into_raw(listener);
+            Listener::new(
+                ListenerToken::new(CBLReplicator_AddChangeListener(
+                    self.get_ref(),
+                    Some(c_replicator_change_listener),
+                    ptr.cast(),
+                )),
+                Box::from_raw(ptr),
+            )
+        };
+        self.change_listener.push(listener);
+        self
+    }
+
+    /** Adds a listener that will be called when documents are replicated. */
+    #[must_use]
+    pub fn add_document_listener(mut self, listener: ReplicatedDocumentListener) -> Self {
+        let listener = unsafe {
+            let listener = Box::new(listener);
+            let ptr = Box::into_raw(listener);
+
+            Listener::new(
+                ListenerToken::new(CBLReplicator_AddDocumentReplicationListener(
+                    self.get_ref(),
+                    Some(c_replicator_document_change_listener),
+                    ptr.cast(),
+                )),
+                Box::from_raw(ptr),
+            )
+        };
+        self.document_listener.push(listener);
+        self
     }
 }
 
@@ -692,42 +781,29 @@ impl From<CBLReplicatorStatus> for ReplicatorStatus {
 }
 
 /** A callback that notifies you when the replicator's status changes. */
-pub type ReplicatorChangeListener = Box<dyn Fn(&Replicator, ReplicatorStatus)>;
+pub type ReplicatorChangeListener = Box<dyn Fn(ReplicatorStatus)>;
 #[no_mangle]
 unsafe extern "C" fn c_replicator_change_listener(
     context: *mut ::std::os::raw::c_void,
-    replicator: *mut CBLReplicator,
+    _replicator: *mut CBLReplicator,
     status: *const CBLReplicatorStatus,
 ) {
     let callback = context as *const ReplicatorChangeListener;
-
-    let replicator = Replicator {
-        cbl_ref: retain(replicator),
-        config: None,
-        headers: None,
-        context: None,
-    };
     let status: ReplicatorStatus = (*status).into();
-    (*callback)(&replicator, status);
+    (*callback)(status);
 }
 
 /** A callback that notifies you when documents are replicated. */
-pub type ReplicatedDocumentListener = Box<dyn Fn(&Replicator, Direction, Vec<ReplicatedDocument>)>;
+pub type ReplicatedDocumentListener = Box<dyn Fn(Direction, Vec<ReplicatedDocument>)>;
 unsafe extern "C" fn c_replicator_document_change_listener(
     context: *mut ::std::os::raw::c_void,
-    replicator: *mut CBLReplicator,
+    _replicator: *mut CBLReplicator,
     is_push: bool,
     num_documents: u32,
     documents: *const CBLReplicatedDocument,
 ) {
     let callback = context as *const ReplicatedDocumentListener;
 
-    let replicator = Replicator {
-        cbl_ref: retain(replicator),
-        config: None,
-        headers: None,
-        context: None,
-    };
     let direction = if is_push {
         Direction::Pushed
     } else {
@@ -745,7 +821,7 @@ unsafe extern "C" fn c_replicator_document_change_listener(
         })
         .collect();
 
-    (*callback)(&replicator, direction, repl_documents);
+    (*callback)(direction, repl_documents);
 }
 
 /** Flags describing a replicated document. */
@@ -764,96 +840,4 @@ pub struct ReplicatedDocument {
 pub enum Direction {
     Pulled,
     Pushed,
-}
-
-impl Replicator {
-    /** Returns the replicator's current status. */
-    pub fn status(&self) -> ReplicatorStatus {
-        unsafe { CBLReplicator_Status(self.get_ref()).into() }
-    }
-
-    /** Indicates which documents have local changes that have not yet been pushed to the server
-    by this replicator. This is of course a snapshot, that will go out of date as the replicator
-    makes progress and/or documents are saved locally. */
-    pub fn pending_document_ids(&self) -> Result<HashSet<String>> {
-        unsafe {
-            let mut error = CBLError::default();
-            let docs: FLDict =
-                CBLReplicator_PendingDocumentIDs(self.get_ref(), std::ptr::addr_of_mut!(error));
-
-            check_error(&error).and_then(|()| {
-                if docs.is_null() {
-                    return Err(Error::default());
-                }
-
-                let dict = Dict::wrap(docs, self);
-                Ok(dict.to_keys_hash_set())
-            })
-        }
-    }
-
-    /** Indicates whether the document with the given ID has local changes that have not yet been
-    pushed to the server by this replicator.
-
-    This is equivalent to, but faster than, calling \ref pending_document_ids and
-    checking whether the result contains \p docID. See that function's documentation for details. */
-    pub fn is_document_pending(&self, doc_id: &str) -> Result<bool> {
-        unsafe {
-            let mut error = CBLError::default();
-            let result = CBLReplicator_IsDocumentPending(
-                self.get_ref(),
-                from_str(doc_id).get_ref(),
-                std::ptr::addr_of_mut!(error),
-            );
-            check_error(&error).map(|_| result)
-        }
-    }
-
-    /**
-     Adds a listener that will be called when the replicator's status changes.
-
-    # Lifetime
-
-    The listener is deleted at the end of life of the `Listener` object.
-    You must keep the `Listener` object as long as you need it.
-    */
-    #[must_use]
-    pub fn add_change_listener(
-        &mut self,
-        listener: ReplicatorChangeListener,
-    ) -> Listener<ReplicatorChangeListener> {
-        unsafe {
-            let listener = Box::new(listener);
-            let ptr = Box::into_raw(listener);
-            Listener::new(
-                ListenerToken::new(CBLReplicator_AddChangeListener(
-                    self.get_ref(),
-                    Some(c_replicator_change_listener),
-                    ptr.cast(),
-                )),
-                Box::from_raw(ptr),
-            )
-        }
-    }
-
-    /** Adds a listener that will be called when documents are replicated. */
-    #[must_use]
-    pub fn add_document_listener(
-        &mut self,
-        listener: ReplicatedDocumentListener,
-    ) -> Listener<ReplicatedDocumentListener> {
-        unsafe {
-            let listener = Box::new(listener);
-            let ptr = Box::into_raw(listener);
-
-            Listener::new(
-                ListenerToken::new(CBLReplicator_AddDocumentReplicationListener(
-                    self.get_ref(),
-                    Some(c_replicator_document_change_listener),
-                    ptr.cast(),
-                )),
-                Box::from_raw(ptr),
-            )
-        }
-    }
 }
