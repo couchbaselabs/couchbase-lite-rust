@@ -693,7 +693,7 @@ impl Replicator {
                 Box::from_raw(ptr),
             )
         };
-        self.change_listener.push(listener);
+        self.change_listeners.push(listener);
         self
     }
 
@@ -713,7 +713,7 @@ impl Replicator {
                 Box::from_raw(ptr),
             )
         };
-        self.document_listener.push(listener);
+        self.document_listeners.push(listener);
         self
     }
 }
