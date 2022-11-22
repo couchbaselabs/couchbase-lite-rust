@@ -495,7 +495,7 @@ pub struct Replicator {
     pub config: Option<ReplicatorConfiguration>,
     pub headers: Option<MutableDict>,
     pub context: Option<Box<ReplicationConfigurationContext>>,
-    change_listener: ReplicatorsListeners<ReplicatorChangeListener>,
+    change_listeners: ReplicatorsListeners<ReplicatorChangeListener>,
     document_listener: ReplicatorsListeners<ReplicatedDocumentListener>,
 }
 
