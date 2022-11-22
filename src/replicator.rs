@@ -496,7 +496,7 @@ pub struct Replicator {
     pub headers: Option<MutableDict>,
     pub context: Option<Box<ReplicationConfigurationContext>>,
     change_listeners: ReplicatorsListeners<ReplicatorChangeListener>,
-    document_listener: ReplicatorsListeners<ReplicatedDocumentListener>,
+    document_listeners: ReplicatorsListeners<ReplicatedDocumentListener>,
 }
 
 impl CblRef for Replicator {
