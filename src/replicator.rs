@@ -574,7 +574,7 @@ impl Replicator {
                 config: Some(config),
                 headers: Some(headers),
                 context: Some(context),
-                change_listener: vec![],
+                change_listeners: vec![],
                 document_listeners: vec![],
             })
         }
