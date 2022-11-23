@@ -20,18 +20,16 @@
 use std::{
     ptr,
     collections::{HashMap, HashSet},
-    sync::mpsc::channel,
-    time::Duration,
 };
 use crate::{
     CblRef, CouchbaseLiteError, Database, Dict, Document, Error, ListenerToken, MutableDict,
     Result, check_error, release, retain,
     slice::{from_str, from_bytes, self},
     c_api::{
-        CBLListener_Remove, CBLAuth_CreatePassword, CBLAuth_CreateSession, CBLAuthenticator,
-        CBLDocument, CBLDocumentFlags, CBLEndpoint, CBLEndpoint_CreateWithLocalDB,
-        CBLEndpoint_CreateWithURL, CBLError, CBLProxySettings, CBLProxyType, CBLReplicatedDocument,
-        CBLReplicator, CBLReplicatorConfiguration, CBLReplicatorStatus, CBLReplicatorType,
+        CBLAuth_CreatePassword, CBLAuth_CreateSession, CBLAuthenticator, CBLDocument,
+        CBLDocumentFlags, CBLEndpoint, CBLEndpoint_CreateWithLocalDB, CBLEndpoint_CreateWithURL,
+        CBLError, CBLProxySettings, CBLProxyType, CBLReplicatedDocument, CBLReplicator,
+        CBLReplicatorConfiguration, CBLReplicatorStatus, CBLReplicatorType,
         CBLReplicator_AddChangeListener, CBLReplicator_AddDocumentReplicationListener,
         CBLReplicator_Create, CBLReplicator_IsDocumentPending, CBLReplicator_PendingDocumentIDs,
         CBLReplicator_SetHostReachable, CBLReplicator_SetSuspended, CBLReplicator_Start,
@@ -592,23 +590,27 @@ impl Replicator {
     \ref kCBLReplicatorStopped after it stops. Until then, consider it still active. */
     pub fn stop(&mut self) -> bool {
         unsafe {
-            let (sender, receiver) = channel();
-            let callback: ReplicatorChangeListener = Box::new(move |status| {
-                if status.activity == ReplicatorActivityLevel::Stopped {
-                    sender.send(true).unwrap();
-                }
-            });
+            // let (sender, receiver) = channel();
+            // let callback: ReplicatorChangeListener = Box::new(move |status| {
+            // if status.activity == ReplicatorActivityLevel::Stopped {
+            // sender.send(true).unwrap();
+            // }
+            // });
 
-            let token = CBLReplicator_AddChangeListener(
-                self.get_ref(),
-                Some(c_replicator_change_listener),
-                std::mem::transmute(&callback),
-            );
+            // let token = CBLReplicator_AddChangeListener(
+            // self.get_ref(),
+            // Some(c_replicator_change_listener),
+            // std::mem::transmute(&callback),
+            // );
+
+            // self.change_listeners.iter().for_each(|l| {
+            // drop(l);
+            // });
 
             CBLReplicator_Stop(self.get_ref());
-            let success = receiver.recv_timeout(Duration::from_secs(10)).is_ok();
-            CBLListener_Remove(token);
-            success
+            // let success = receiver.recv_timeout(Duration::from_secs(10)).is_ok();
+            // CBLListener_Remove(token);
+            true
         }
     }
 
