@@ -53,17 +53,23 @@ fn main() -> Result<(), Box<dyn Error>> {
 }
 
 fn bindgen_for_mac(builder: bindgen::Builder) -> Result<bindgen::Builder, Box<dyn Error>> {
-    if env::var("CARGO_CFG_TARGET_OS")? != "macos" {
+    let target = env::var("TARGET")?;
+    if !target.contains("apple") {
         return Ok(builder);
     }
 
-    let sdk = String::from_utf8(
-        Command::new("xcrun")
-            .args(["--sdk", "macosx", "--show-sdk-path"])
-            .output()
-            .expect("failed to execute process")
-            .stdout,
-    )?;
+    let sdk = if target.contains("ios") {
+        if target.contains("x86") || target.contains("sim") {
+            "iphonesimulator"
+        } else {
+            "iphoneos"
+        }
+    } else {
+        "macosx"
+    };
+
+    let sdk = String::from_utf8(Command::new("xcrun").args(&["--sdk", sdk, "--show-sdk-path"]).output().expect("failed to execute process").stdout)?;
+
     Ok(builder.clang_arg(format!("-isysroot{}", sdk.trim())))
 }
 
