@@ -139,15 +139,7 @@ fn configure_rustc() -> Result<(), Box<dyn Error>> {
 
     let target_dir = env::var("TARGET")?;
     let target_os = env::var("CARGO_CFG_TARGET_OS")?;
-    if target_os != "ios" {
-        println!("cargo:rustc-link-lib=dylib=cblite");
-        println!(
-            "cargo:rustc-link-search={}/{}/{}",
-            env!("CARGO_MANIFEST_DIR"),
-            CBL_LIB_DIR,
-            target_dir
-        );
-    } else {
+    if target_os == "ios" {
         let target_arch = env::var("CARGO_CFG_TARGET_ARCH").expect("Can't read target_arch");
         let ios_framework = match target_arch.as_str() {
             "aarch64" => "ios-arm64_armv7",
@@ -162,6 +154,21 @@ fn configure_rustc() -> Result<(), Box<dyn Error>> {
             ios_framework,
         );
         println!("cargo:rustc-link-lib=framework=CouchbaseLite");
+    } else if target_os == "macos" {
+        println!("cargo:rustc-link-lib=dylib=cblite");
+        println!(
+            "cargo:rustc-link-search={}/{}/macos",
+            env!("CARGO_MANIFEST_DIR"),
+            CBL_LIB_DIR
+        );
+    } else {
+        println!("cargo:rustc-link-lib=dylib=cblite");
+        println!(
+            "cargo:rustc-link-search={}/{}/{}",
+            env!("CARGO_MANIFEST_DIR"),
+            CBL_LIB_DIR,
+            target_dir
+        );
     }
     Ok(())
 }
@@ -174,6 +181,8 @@ pub fn copy_lib() -> Result<(), Box<dyn Error>> {
         CBL_LIB_DIR,
         if target_os == "ios" {
             "ios".to_string()
+        } else if target_os == "macos" {
+            "macos".to_string()
         } else {
             env::var("TARGET").unwrap()
         }
