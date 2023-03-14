@@ -614,7 +614,7 @@ impl Replicator {
             );
 
             CBLReplicator_Stop(self.get_ref());
-            let success = receiver.recv_timeout(Duration::from_secs(10)).is_ok();
+            let success = receiver.recv_timeout(Duration::from_secs(1)).is_ok();
             CBLListener_Remove(token);
             success
         }
