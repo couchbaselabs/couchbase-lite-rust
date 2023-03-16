@@ -16,7 +16,6 @@
 //
 
 extern crate couchbase_lite;
-extern crate lazy_static;
 
 use self::couchbase_lite::*;
 use encryptable::Encryptable;
@@ -654,79 +653,63 @@ fn encryption_error() {
 
 #[test]
 fn decryption_error() {
-    let config2 = utils::ReplicationTestConfiguration {
+    let config = utils::ReplicationTestConfiguration {
         continuous: false,
         ..Default::default()
     };
 
-    let context1 = ReplicationConfigurationContext {
-        property_encryptor: Some(encryptor),
-        property_decryptor: Some(decryptor),
-        ..Default::default()
-    };
-
-    let context2 = ReplicationConfigurationContext {
+    let context = ReplicationConfigurationContext {
         property_encryptor: Some(encryptor),
         property_decryptor: Some(decryptor_err),
         ..Default::default()
     };
 
-    let mut tester = utils::ReplicationThreeDbsTester::new(
-        utils::ReplicationTestConfiguration::default(),
-        config2.clone(),
-        Box::new(context1),
-        Box::new(context2),
-    );
+    let mut tester = utils::ReplicationTwoDbsTester::new(config.clone(), Box::new(context));
 
-    tester.test(|local_db1, local_db2, central_db, _, repl2| {
-        // Save doc 'foo' with an encryptable property
+    tester.test(|local_db, central_db, repl| {
+        // Save doc 'foo' with an encrypted property in central
         {
-            let mut doc = Document::new_with_id("foo");
-            let mut props = doc.mutable_properties();
-            props.at("i").put_i64(1234);
-            props
-                .at("s")
-                .put_encrypt(&Encryptable::create_with_string("test_encryption"));
-            local_db1
-                .save_document_with_concurency_control(&mut doc, ConcurrencyControl::FailOnConflict)
+            let mut doc_db1 = Document::new_with_id("foo");
+
+            let doc = r#"{"i":1234,"encrypted$s":{"alg":"CB_MOBILE_CUSTOM","ciphertext":"EkRVQ0RvVV5TQklARFlfXhI="}}"#;
+            doc_db1.set_properties_as_json(&doc).unwrap();
+
+            central_db
+                .save_document_with_concurency_control(
+                    &mut doc_db1,
+                    ConcurrencyControl::FailOnConflict,
+                )
                 .expect("save");
         }
 
-        // Check document is replicated in central
-        assert!(utils::check_callback_with_wait(
-            || central_db.get_document("foo").is_ok(),
-            None
-        ));
-        {
-            let doc_central = central_db.get_document("foo").unwrap();
-            let dict = doc_central.properties();
-            assert!(dict.to_keys_hash_set().get("encrypted$s").is_some());
-        }
+        assert!(central_db.get_document("foo").is_ok());
 
         // Manually trigger the replication
-        repl2.start(false);
+        repl.start(false);
 
-        // Check document is not replicated in DB2 because of the decryption error
+        // Check document is not replicated in local because of the decryption error
         thread::sleep(Duration::from_secs(5));
-        assert!(local_db2.get_document("foo").is_err());
+        assert!(local_db.get_document("foo").is_err());
     });
 
-    // Change local DB 2 replicator to make the decryption work
-    let context2 = ReplicationConfigurationContext {
+    // Change local DB replicator to make the decryption work
+    let context = ReplicationConfigurationContext {
         property_encryptor: Some(encryptor),
         property_decryptor: Some(decryptor),
         ..Default::default()
     };
 
-    tester.change_replicator_2(config2, Box::new(context2));
+    tester.change_replicator(config, Box::new(context));
 
-    tester.test(|_, local_db2, _, _, repl2| {
+    tester.test(|local_db, _, repl| {
         // Manually trigger the replication
-        repl2.start(true); // 'reset_checkpoint = true' will trigger a new decryption, else the document will not be pulled again
+        repl.start(false);
 
-        // Check document is not replicated in DB2 because of the decryption error
-        thread::sleep(Duration::from_secs(5));
-        assert!(local_db2.get_document("foo").is_err());
+        // Check document is replicated in local
+        assert!(utils::check_callback_with_wait(
+            || local_db.get_document("foo").is_ok(),
+            None
+        ));
     });
 }
 
