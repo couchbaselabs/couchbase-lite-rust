@@ -171,15 +171,15 @@ impl Error {
             }
             ErrorCode::POSIX(e) => {
                 domain = kCBLPOSIXDomain;
-                code = *e as i32;
+                code = *e;
             }
             ErrorCode::SQLite(e) => {
                 domain = kCBLSQLiteDomain;
-                code = *e as i32;
+                code = *e;
             }
             ErrorCode::WebSocket(e) => {
                 domain = kCBLWebSocketDomain;
-                code = *e as i32;
+                code = *e;
             }
         }
         CBLError {
