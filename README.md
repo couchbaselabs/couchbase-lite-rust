@@ -1,3 +1,5 @@
+# This repo has been archived.  Please see https://github.com/Dushistov/couchbase-lite-rust 
+
 # EXPERIMENTAL Rust Bindings For Couchbase Lite
 
 This is a Rust API binding of [Couchbase Lite][CBL], an embedded NoSQL document database engine with sync.
